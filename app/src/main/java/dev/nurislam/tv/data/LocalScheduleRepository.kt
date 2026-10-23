@@ -66,6 +66,7 @@ class LocalScheduleRepository(private val storage: ScheduleStorage) : ScheduleRe
         require(candidate.metadata.approved) { "Неутверждённое расписание нельзя применить" }
         // Revalidate at the mutation boundary, including candidates supplied by internal callers.
         val checked = ScheduleJson.parse(candidate.json.toByteArray(Charsets.UTF_8))
+        require(checked.metadata.approved) { "Неутверждённое расписание нельзя применить" }
         val old = mutable.value
         check(old.loaded) { "Расписание ещё загружается" }
         storage.write(encode(checked, old.current))

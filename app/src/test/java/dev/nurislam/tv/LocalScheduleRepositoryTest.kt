@@ -66,5 +66,10 @@ class LocalScheduleRepositoryTest {
         val demo = ScheduleJson.parse(ScheduleFixtures.json(approved = false).toString().toByteArray())
         try { repo.apply(demo); fail("Expected rejection") } catch (_: IllegalArgumentException) {}
         assertNull(repo.state.value.current)
+        val mismatched = ValidatedSchedule(demo.metadata.copy(approved = true), demo.locationId, demo.locationName, demo.fajrMeaning, demo.days, demo.json)
+        val before = disk.bytes!!.copyOf()
+        try { repo.apply(mismatched); fail("Revalidated JSON approval must win over in-memory metadata") } catch (_: IllegalArgumentException) {}
+        assertArrayEquals(before, disk.bytes)
+        assertNull(repo.state.value.current)
     }
 }
