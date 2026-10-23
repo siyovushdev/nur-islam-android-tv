@@ -10,16 +10,24 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import java.security.MessageDigest
 
 interface ScheduleStorage {
     fun read(): ByteArray?
-    /** Failure must leave the last committed bytes readable. */
+    /** Pre-finish errors roll back. Finalization/verification errors may follow a commit;
+     * callers must keep their last verified state and must not attempt a destructive rollback. */
     fun write(bytes: ByteArray)
 }
 
-class AtomicScheduleStorage(file: File) : ScheduleStorage {
-    private val atomic = AtomicFile(file)
+class ScheduleWriteUncertainException(cause: Exception) : IOException(
+    "Не удалось подтвердить запись расписания: файл мог уже обновиться. " +
+        "Табло сохраняет последнее проверенное расписание. Проверьте хранилище и повторите операцию.",
+    cause,
+)
+
+class AtomicScheduleStorage internal constructor(private val atomic: AtomicFile) : ScheduleStorage {
+    constructor(file: File) : this(AtomicFile(file))
     override fun read(): ByteArray? = if (atomic.baseFile.exists() || File(atomic.baseFile.path + ".bak").exists())
         atomic.openRead().use { input ->
             val bytes = input.readBytesBounded(ScheduleJson.MAX_BYTES * 3)
@@ -30,10 +38,18 @@ class AtomicScheduleStorage(file: File) : ScheduleStorage {
         try {
             stream.write(bytes)
             stream.fd.sync()
-            atomic.finishWrite(stream)
-            check(atomic.openRead().use { it.readBytesBounded(ScheduleJson.MAX_BYTES * 3) }.contentEquals(bytes)) { "Проверка записи не пройдена" }
+        } catch (e: Exception) {
+            atomic.failWrite(stream)
+            throw e
         }
-        catch (e: Exception) { atomic.failWrite(stream); throw e }
+        // finishWrite is the terminal operation. Once invoked, failWrite is no longer safe
+        // (on API 26 it can delete the committed base file after its backup was removed).
+        try {
+            stream.use { atomic.finishWrite(it) }
+            check(atomic.openRead().use { it.readBytesBounded(ScheduleJson.MAX_BYTES * 3) }.contentEquals(bytes)) { "Проверка записи не пройдена" }
+        } catch (e: Exception) {
+            throw ScheduleWriteUncertainException(e)
+        }
     }
 }
 
