@@ -1,3 +1,5 @@
+**АРХИВ — этап 1 завершён и слит как PR #8. Новая цель: [CODEX_MVP_GOAL.md](CODEX_MVP_GOAL.md).**
+
 # Задача Codex — Этап 1: каркас нативного Android TV APK
 
 Репозиторий: `siyovushdev/nur-islam-android-tv`, ветка `main`.
