@@ -64,7 +64,7 @@ class BoardUiTest {
     }
     @Test fun unavailableKeepsClockAndNeverShowsSampleTimes() {
         board(true, unavailable = true)
-        compose.onNodeWithText("Расписание недоступно").assertIsDisplayed()
+        compose.onNodeWithText("Расписание недоступно", substring = true).assertIsDisplayed()
         compose.onAllNodesWithText("15:15").assertCountEquals(0)
         compose.onNodeWithText("14:20").assertIsDisplayed()
         saveScreenshot("unavailable")
@@ -74,6 +74,22 @@ class BoardUiTest {
         board(true, state = state)
         compose.runOnIdle { state.value = instant.plusSeconds(65) }
         compose.onNodeWithText("00:53:55").assertIsDisplayed()
+    }
+    @Test fun unconfirmedFajrShowsUncertaintyInsteadOfDhuhrCountdown() {
+        val morning = Instant.parse("2026-10-23T03:00:00Z")
+        val clock = mutableStateOf(morning)
+        compose.setContent {
+            NurIslamTheme {
+                Box(Modifier.requiredSize(960.dp, 540.dp)) {
+                    PrayerBoardScreen(morning, clock, day, null, true, true,
+                        status = prayerStatus(morning, listOf(day), dev.nurislam.tv.data.FajrMeaning.UNCONFIRMED))
+                }
+            }
+        }
+        compose.onNodeWithText("Время Фаджра требует подтверждения", substring = true).assertIsDisplayed()
+        compose.onNodeWithTag("next-time").assertDoesNotExist()
+        compose.onNodeWithTag("countdown").assertDoesNotExist()
+        saveScreenshot("fajr-unconfirmed")
     }
     @Test fun clockwiseCornersRenderWithoutClipping() = corners(DisplayMode.PORTRAIT_ROTATE_CW)
     @Test fun counterclockwiseCornersRenderWithoutClipping() = corners(DisplayMode.PORTRAIT_ROTATE_CCW)

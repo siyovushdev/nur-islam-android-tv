@@ -93,9 +93,9 @@ class MainActivity : ComponentActivity() {
                     val now = rememberBoardClock()
                     val minute by remember(now) { derivedStateOf { now.value.truncatedTo(ChronoUnit.MINUTES) } }
                     val date = minute.atZone(MoscowZone).toLocalDate()
-                    val active = schedules.current
+                    val active = remember(schedules, date) { schedules.scheduleFor(date) }
                     val day = remember(active, date) { active?.day(date) }
-                    val status = remember(active, minute) { prayerStatus(minute, active) }
+                    val status = remember(schedules, minute) { prayerStatus(minute, schedules) }
                     val next = (status as? PrayerStatus.Upcoming)?.prayer
                     BoxWithConstraints(Modifier.fillMaxSize().background(LocalBoardAppearance.current.Deep)
                         .onPreviewKeyEvent { e ->
@@ -128,6 +128,7 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onInbox = { vm.importInbox() }, onApply = { vm.applyCandidate() }, onRollback = { vm.rollback() },
                                     onDismissCandidate = vm::dismissCandidate, onDismissMessage = vm::dismissMessage,
+                                    onTimeSettings = { launchSafely(Intent(Settings.ACTION_DATE_SETTINGS), "Настройки даты и времени недоступны. Откройте системные настройки вручную.") },
                                     onHomeSettings = {
                                         try { startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) }
                                         catch (_: ActivityNotFoundException) { launchSafely(Intent(Settings.ACTION_SETTINGS), "Системные настройки недоступны. Используйте инструкцию ADB для возврата штатного HOME.") }

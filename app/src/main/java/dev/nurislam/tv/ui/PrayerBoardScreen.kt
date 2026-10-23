@@ -33,8 +33,6 @@ fun PrayerBoardScreen(
     next: NextPrayer?,
     landscape: Boolean,
     demo: Boolean,
-    frozen: Boolean = false,
-    debug: Boolean = false,
     status: PrayerStatus? = null,
     notice: String? = null,
 ) {
@@ -52,7 +50,7 @@ fun PrayerBoardScreen(
                     Header(scale, Modifier.weight(.26f))
                     ClockAndDate(minute, date, scale, Modifier.weight(.32f))
                     NextPrayerCard(next, now, day, date, scale, Modifier.weight(.32f), status)
-                    Footer(demo, frozen, debug, scale, Modifier.weight(.10f), notice)
+                    Footer(demo, scale, Modifier.weight(.10f), notice)
                 }
                 ScheduleTable(day, next, scale, Modifier.weight(1f).fillMaxHeight().padding(vertical = (26 * scale).dp))
             }
@@ -63,7 +61,7 @@ fun PrayerBoardScreen(
                 NextPrayerCard(next, now, day, date, scale, Modifier.weight(.19f), status)
                 Spacer(Modifier.weight(.015f))
                 ScheduleTable(day, next, scale, Modifier.weight(.38f))
-                Footer(demo, frozen, debug, scale, Modifier.weight(.05f), notice)
+                Footer(demo, scale, Modifier.weight(.05f), notice)
             }
         }
     }
@@ -106,10 +104,18 @@ private fun NextPrayerCard(next: NextPrayer?, now: State<Instant>, day: DaySched
     ) {
         BoardText(boardLanguage(stringResource(R.string.next_prayer)), 34f, s, Modifier.fillMaxWidth().weight(.20f), color = colors.Gold)
         if (next == null) {
-            BoardText(stringResource(when { status is PrayerStatus.FajrUnconfirmed -> R.string.fajr_uncertain; day == null -> R.string.unavailable; else -> R.string.no_next }), 43f, s,
-                Modifier.fillMaxWidth().weight(.44f).testTag("schedule-status"), bold = true)
-            BoardText(when { status is PrayerStatus.FajrUnconfirmed -> stringResource(R.string.fajr_uncertain_detail); day == null -> stringResource(R.string.unavailable_detail, date.toString()); else -> stringResource(R.string.no_next_detail) },
-                27f, s, Modifier.fillMaxWidth().weight(.36f), color = colors.Secondary)
+            val title = when {
+                status is PrayerStatus.FajrUnconfirmed -> statusLabel(R.string.fajr_uncertain_tt, R.string.fajr_uncertain)
+                day == null -> statusLabel(R.string.unavailable_tt, R.string.unavailable)
+                else -> statusLabel(R.string.no_next_tt, R.string.no_next)
+            }
+            val detail = when {
+                status is PrayerStatus.FajrUnconfirmed -> statusLabel(R.string.fajr_uncertain_detail_tt, R.string.fajr_uncertain_detail) + " · ${status.date}"
+                day == null -> statusLabel(R.string.unavailable_detail_tt, R.string.unavailable_detail, date.toString())
+                else -> statusLabel(R.string.no_next_detail_tt, R.string.no_next_detail)
+            }
+            BoardText(title, 43f, s, Modifier.fillMaxWidth().weight(.44f).testTag("schedule-status"), bold = true, lines = 2)
+            BoardText(detail, 27f, s, Modifier.fillMaxWidth().weight(.36f), color = colors.Secondary, lines = 2)
         } else {
             val labels = eventLabels(next.event)
             BoardText(prayerLabel(labels.first, labels.second), 76f, s,
@@ -167,27 +173,26 @@ private fun ScheduleTable(day: DaySchedule?, next: NextPrayer?, s: Float, modifi
 }
 
 @Composable
-private fun Footer(demo: Boolean, frozen: Boolean, debug: Boolean, s: Float, modifier: Modifier, notice: String?) {
+private fun Footer(demo: Boolean, s: Float, modifier: Modifier, notice: String?) {
     val colors = LocalBoardAppearance.current
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         if (colors.ornate) Ornament(Modifier.fillMaxWidth(.4f).height((24 * s).dp))
-        if (demo) BoardText(stringResource(if (frozen) R.string.debug_frozen else R.string.demo_label), 23f, s,
+        if (demo) BoardText(stringResource(R.string.demo_label), 23f, s,
             Modifier.fillMaxWidth().weight(1f).testTag("demo-label"), color = colors.Gold)
         if (notice != null && !demo) BoardText(notice, 22f, s, Modifier.fillMaxWidth().weight(1f), color = colors.Secondary)
-        if (debug) BoardText(stringResource(R.string.debug_hint), 17f, s, Modifier.fillMaxWidth().weight(.6f), color = colors.Secondary)
     }
 }
 
 @Composable
 private fun BoardText(text: String, size: Float, s: Float, modifier: Modifier, color: Color = Color.Unspecified,
-    bold: Boolean = false, digits: Boolean = false, align: TextAlign = TextAlign.Center) {
+    bold: Boolean = false, digits: Boolean = false, align: TextAlign = TextAlign.Center, lines: Int = 1) {
     val colors = LocalBoardAppearance.current
     val settings = LocalBoardSettings.current
     val resolvedColor = if (color == Color.Unspecified) colors.Text else color
     Box(modifier, contentAlignment = when (align) { TextAlign.Start -> Alignment.CenterStart; TextAlign.End -> Alignment.CenterEnd; else -> Alignment.Center }) {
         BasicText(text, style = (if (digits) BoardDigitsStyle else BoardTextStyle).copy(color = resolvedColor, fontFamily = colors.fontFamily,
             fontWeight = if (bold || digits) FontWeight.Bold else FontWeight.Normal, textAlign = align),
-            maxLines = 1, softWrap = false,
+            maxLines = lines, softWrap = lines > 1,
             autoSize = TextAutoSize.StepBased(minFontSize = 6.sp, maxFontSize = (size * s * settings.textScale).coerceAtLeast(6f).sp, stepSize = .5.sp))
     }
 }
@@ -217,4 +222,11 @@ private fun boardLanguage(text: String): String {
         BoardLanguage.TATAR -> text.substringBefore(" · ")
         BoardLanguage.RUSSIAN -> text.substringAfter(" · ")
     }
+}
+
+@Composable
+private fun statusLabel(tt: Int, ru: Int, vararg args: Any): String = when (LocalBoardSettings.current.language) {
+    BoardLanguage.BOTH -> "${stringResource(tt, *args)}\n${stringResource(ru, *args)}"
+    BoardLanguage.TATAR -> stringResource(tt, *args)
+    BoardLanguage.RUSSIAN -> stringResource(ru, *args)
 }

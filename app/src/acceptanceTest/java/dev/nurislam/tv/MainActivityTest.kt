@@ -120,7 +120,9 @@ class MainActivityTest {
         runBlocking { app.schedules.rollback() }
         compose.onNodeWithTag("row-ASR").assert(hasAnyDescendant(hasText("15:15")))
         runBlocking { app.schedules.apply(ScheduleFixtures.schedule(year + 1, "next-year")) }
-        compose.onNodeWithText("Расписание недоступно").assertIsDisplayed()
+        compose.onNodeWithTag("row-ASR").assert(hasAnyDescendant(hasText("15:15")))
+        runBlocking { app.schedules.apply(ScheduleFixtures.schedule(year + 2, "unsupported-year")) }
+        compose.onNodeWithText("Расписание недоступно", substring = true).assertIsDisplayed()
         compose.onAllNodesWithText("15:15").assertCountEquals(0)
     }
 

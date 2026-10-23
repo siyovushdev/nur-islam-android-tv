@@ -16,15 +16,19 @@
     <string name="asr_tt">Икенде</string><string name="asr_ru">Аср</string>
     <string name="maghrib_tt">Ахшам</string><string name="maghrib_ru">Магриб</string>
     <string name="isha_tt">Ястү</string><string name="isha_ru">Иша</string>
-    <string name="debug_hint">MENU / M · диагностика</string>
     <string name="mode_auto">AUTO · по размеру окна</string>
     <string name="mode_native">PORTRAIT_NATIVE · портрет</string>
     <string name="mode_cw">PORTRAIT_ROTATE_CW · +90°</string>
     <string name="mode_ccw">PORTRAIT_ROTATE_CCW · −90°</string>
     <string name="mode_landscape">LANDSCAPE · горизонтальный ТВ</string>
-    <string name="debug_frozen">TEST / DEMO · 23.10.2026 14:20 · часы остановлены</string>
     <string name="fajr_uncertain">Время Фаджра требует подтверждения</string>
     <string name="fajr_uncertain_detail">Поле «в мечети» не подтверждено как начало намаза</string>
     <string name="settings_hint">Настройки: нажмите OK пять раз за 5 секунд</string>
     <string name="storage_notice">Проверьте расписание · настройки: 5 × OK</string>
+    <string name="unavailable_tt">Намаз вакытлары юк</string>
+    <string name="unavailable_detail_tt">Расланган мәгълүмат юк: %1$s</string>
+    <string name="no_next_tt">Киләсе намаз вакыты билгесез</string>
+    <string name="no_next_detail_tt">Киләсе көннең намаз вакытлары кирәк</string>
+    <string name="fajr_uncertain_tt">Иртәнге намаз вакыты расланмаган</string>
+    <string name="fajr_uncertain_detail_tt">«Мәчеттә укыла» баганасының мәгънәсе расланмаган</string>
 </resources>

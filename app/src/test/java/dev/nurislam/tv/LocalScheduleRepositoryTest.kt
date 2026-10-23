@@ -46,6 +46,18 @@ class LocalScheduleRepositoryTest {
         assertEquals("one", restarted.state.value.current!!.metadata.revision)
         assertNotNull(restarted.state.value.problem)
     }
+    @Test fun nextYearCanBeLoadedAheadWithoutLosingCurrentYearAndRollbackRejectsFuture() = runBlocking {
+        val repo = LocalScheduleRepository(MemoryScheduleStorage()); repo.load()
+        repo.apply(ScheduleFixtures.schedule(2026, "2026", meaning = "PRAYER_START"))
+        repo.apply(ScheduleFixtures.schedule(2027, "2027", meaning = "PRAYER_START"))
+        assertEquals(2026, repo.state.value.scheduleFor(java.time.LocalDate.of(2026, 12, 31))!!.metadata.year)
+        val before = dev.nurislam.tv.domain.prayerStatus(java.time.Instant.parse("2026-12-31T20:59:59Z"), repo.state.value) as dev.nurislam.tv.domain.PrayerStatus.Upcoming
+        assertEquals(java.time.LocalDate.of(2027, 1, 1), before.prayer.at.atZone(dev.nurislam.tv.model.MoscowZone).toLocalDate())
+        assertEquals(2027, repo.state.value.scheduleFor(java.time.LocalDate.of(2027, 1, 1))!!.metadata.year)
+        assertNull(repo.state.value.scheduleFor(java.time.LocalDate.of(2028, 1, 1)))
+        repo.rollback()
+        assertNull(repo.state.value.scheduleFor(java.time.LocalDate.of(2027, 1, 1)))
+    }
     @Test fun corruptMissingAndUnapprovedNeverInventSchedule() = runBlocking {
         val disk = MemoryScheduleStorage(); val repo = LocalScheduleRepository(disk); repo.load()
         assertNull(repo.state.value.current)

@@ -56,6 +56,7 @@ fun AdminPanel(
     onRollback: () -> Unit,
     onDismissCandidate: () -> Unit,
     onDismissMessage: () -> Unit,
+    onTimeSettings: () -> Unit = {},
     onHomeSettings: () -> Unit,
     onOtherLauncher: () -> Unit,
     onClose: () -> Unit,
@@ -101,7 +102,7 @@ fun AdminPanel(
             AdminItem("Язык: ${when (settings.language) { BoardLanguage.BOTH -> "Татарский + русский"; BoardLanguage.TATAR -> "Татарский"; BoardLanguage.RUSSIAN -> "Русский" }}") { onSettings { it.copy(language = BoardLanguage.entries[(it.language.ordinal + 1) % BoardLanguage.entries.size]) } },
             AdminItem("Название: ${settings.mosqueName}", "Экранная клавиатура управляется D-pad") { edit = "name" },
             AdminItem("Местоположение: ${settings.location}", "Меняет подпись, но не часовой пояс и расписание") { edit = "location" },
-            AdminItem("Расписание", data?.let { "${it.metadata.year} · ${it.metadata.revision}" } ?: "Нет утверждённого календаря") { navigate(AdminPage.SCHEDULE) },
+            AdminItem("Расписание", data?.let { "Последний импорт: ${it.metadata.year} · ${it.metadata.revision}" } ?: "Нет утверждённого календаря") { navigate(AdminPage.SCHEDULE) },
             AdminItem("Диагностика") { navigate(AdminPage.DIAGNOSTICS) },
             AdminItem("Основной экран HOME / безопасный выход") { navigate(AdminPage.HOME) },
             AdminItem("Икамат: не настроен", "Нужны утверждённые правила мечети. Автоматические интервалы отключены.", false) {},
@@ -121,7 +122,7 @@ fun AdminPanel(
             AdminItem("Импорт JSON — выбрать файл", "Системный файловый диалог (SAF); доступность зависит от прошивки") { onPickFile() },
             AdminItem("Импорт из локальной папки", "incoming-schedule.json · резервный способ через ADB/USB. $inboxPath") { onInbox() },
             AdminItem("Откат к предыдущему расписанию", schedules.previous?.let { "${it.metadata.year} / ${it.metadata.revision}" } ?: "Резервной версии пока нет", schedules.previous != null) { navigate(AdminPage.ROLLBACK) },
-            AdminItem("Источник текущего календаря", data?.let { "${it.locationName}; ${it.metadata.year}; ${it.metadata.source}; revision=${it.metadata.revision}; approved=${it.metadata.approved}; ${it.days.size} дней; Фаджр=${it.fajrMeaning}" } ?: "Расписание не загружено", false) {},
+            AdminItem("Последний применённый файл", data?.let { "${it.locationName}; ${it.metadata.year}; ${it.metadata.source}; revision=${it.metadata.revision}; approved=${it.metadata.approved}; ${it.days.size} дней; Фаджр=${it.fajrMeaning}" } ?: "Расписание не загружено", false) {},
             AdminItem("Состояние хранилища", schedules.problem ?: if (schedules.loaded) "Проверено; сеть не требуется" else "Загрузка…", false) {},
         )
         page == AdminPage.ROLLBACK -> listOf(
@@ -132,12 +133,12 @@ fun AdminPanel(
             val today = Instant.now().atZone(MoscowZone).toLocalDate()
             val comparedDate = if (candidate.days.containsKey(today)) today else candidate.days.keys.minOrNull()!!
             val incoming = candidate.day(comparedDate)!!
-            val current = data?.day(comparedDate)
+            val current = schedules.scheduleFor(comparedDate)?.day(comparedDate)
             listOf(
                 AdminItem("Отменить импорт") { onDismissCandidate(); navigate(AdminPage.SCHEDULE) },
                 AdminItem("Проверено: ${candidate.metadata.year}, ${candidate.days.size} дней", "${candidate.locationName} [${candidate.locationId}] · Europe/Moscow · ${candidate.metadata.source} · revision=${candidate.metadata.revision} · approved=${candidate.metadata.approved} · Фаджр=${candidate.fajrMeaning}", false) {},
                 AdminItem(if (approval) "✓ Источник утверждён мечетью" else "Подтверждаю: источник утверждён мечетью", "Файл не подтверждает подлинность сам по себе. Проверьте источник, особенно Иша и Фаджр.", candidate.metadata.approved) { approval = !approval },
-                AdminItem("Применить расписание", if (!candidate.metadata.approved) "Запрещено: approved=false. Нужен утверждённый файл." else if (candidate.metadata.year != today.year) "Внимание: год отличается от даты устройства. Текущий экран может остаться без времён." else "Текущая версия сохранится для отката", approval && candidate.metadata.approved) { onApply(); navigate(AdminPage.SCHEDULE) },
+                AdminItem("Применить расписание", if (!candidate.metadata.approved) "Запрещено: approved=false. Нужен утверждённый файл." else if (candidate.metadata.year != today.year) "Год отличается от даты устройства. Предыдущий меньший год сохраняется до перехода; если подходящего года нет, табло не покажет времена." else "Текущая версия сохранится для отката", approval && candidate.metadata.approved) { onApply(); navigate(AdminPage.SCHEDULE) },
             ) + ScheduleEvent.entries.map { event ->
                 AdminItem("$comparedDate / ${event.name}", "${current?.times?.get(event)?.let(::formatTime) ?: "—"} → ${formatTime(incoming.times.getValue(event))}", false) {}
             }
@@ -152,7 +153,8 @@ fun AdminPanel(
             AdminItem("Назад") { navigate(AdminPage.SETTINGS) },
             AdminItem("Версия $version", "${settings.theme}; ${settings.displayMode}; масштаб=${settings.textScale}; язык=${settings.language}", false) {},
             AdminItem("Время и часовой пояс", "Система: ${Instant.now()} / ${ZoneId.systemDefault().id}. Табло: Europe/Moscow. Ошибочные часы исправляются в настройках устройства.", false) {},
-            AdminItem("Календарь", data?.let { "${it.metadata.year}; ${it.metadata.source}; ${it.metadata.revision}; approved=${it.metadata.approved}; ${it.days.size} дней; ${it.locationId}" } ?: "Нет утверждённых данных", false) {},
+            AdminItem("Открыть настройки даты и времени", "Если часы или дата неверны, исправьте их в Android. Приложение не угадывает правильное время без источника.") { onTimeSettings() },
+            AdminItem("Календарь на дату устройства", schedules.scheduleFor(Instant.now().atZone(MoscowZone).toLocalDate())?.let { "${it.metadata.year}; ${it.metadata.source}; ${it.metadata.revision}; approved=${it.metadata.approved}; ${it.days.size} дней; ${it.locationId}" } ?: "Нет утверждённых данных", false) {},
             AdminItem("Офлайн-работа", "Сетевых разрешений нет. Импорт и откат локальные. SAF/USB, HOME, холодный запуск, overscan и 72 часа требуют проверки на целевом ТВ.", false) {},
             AdminItem("Последнее состояние", schedules.problem ?: "Хранилище без зарегистрированных ошибок", false) {},
         )
