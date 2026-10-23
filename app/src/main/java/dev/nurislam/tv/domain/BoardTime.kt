@@ -1,5 +1,6 @@
 package dev.nurislam.tv.domain
 
+import dev.nurislam.tv.data.FajrMeaning
 import dev.nurislam.tv.model.DaySchedule
 import dev.nurislam.tv.model.MoscowZone
 import dev.nurislam.tv.model.ScheduleEvent
@@ -17,11 +18,8 @@ private val ttMonths = listOf("гыйнвар", "февраль", "март", "�
 
 data class NextPrayer(val event: ScheduleEvent, val at: Instant)
 
-fun nextPrayer(now: Instant, days: List<DaySchedule>): NextPrayer? = days.flatMap { day ->
-    day.times.filterKeys { it.canBeNextPrayer }.map { (event, time) ->
-        NextPrayer(event, day.date.atTime(time).atZone(MoscowZone).toInstant())
-    }
-}.filter { it.at > now }.minByOrNull { it.at }
+fun nextPrayer(now: Instant, days: List<DaySchedule>, meaning: FajrMeaning = FajrMeaning.UNCONFIRMED): NextPrayer? =
+    (prayerStatus(now, days, meaning) as? PrayerStatus.Upcoming)?.prayer
 
 fun formatTime(time: LocalTime): String = timeFormat.format(time)
 fun formatClock(now: Instant): String = formatTime(now.atZone(MoscowZone).toLocalTime())

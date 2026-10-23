@@ -14,8 +14,7 @@ import java.time.Clock
 import java.time.Instant
 
 @Composable
-fun rememberBoardClock(frozen: Boolean): State<Instant> {
-    val clock = remember(frozen) { if (frozen) Clock.fixed(Instant.parse("2026-10-23T11:20:00Z"), java.time.ZoneOffset.UTC) else Clock.systemUTC() }
+fun rememberBoardClock(clock: Clock = Clock.systemUTC()): State<Instant> {
     val result = remember(clock) { mutableStateOf(clock.instant()) }
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle

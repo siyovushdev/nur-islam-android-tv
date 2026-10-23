@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.runner.RunWith
-import dev.nurislam.tv.data.DemoScheduleRepository
+import dev.nurislam.tv.data.DemoScheduleFixture
 import dev.nurislam.tv.domain.*
 import dev.nurislam.tv.model.ScheduleEvent
 import dev.nurislam.tv.ui.*
@@ -30,7 +30,7 @@ import java.time.LocalDate
 class BoardUiTest {
     @get:Rule val compose = createComposeRule()
     private val instant = Instant.parse("2026-10-23T11:20:00Z")
-    private val day = DemoScheduleRepository().day(LocalDate.of(2026, 10, 23))!!
+    private val day = DemoScheduleFixture().day(LocalDate.of(2026, 10, 23))!!
 
     private fun board(landscape: Boolean, unavailable: Boolean = false, state: State<Instant> = mutableStateOf(instant)) {
         compose.setContent {
