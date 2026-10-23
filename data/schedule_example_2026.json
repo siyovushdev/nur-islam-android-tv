@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "locationId": "kazan-nur-islam",
+  "locationName": "Нур Ислам, Казань",
+  "timezone": "Europe/Moscow",
+  "year": 2026,
+  "source": "DEMO / NOT APPROVED",
+  "revision": "example-1",
+  "approved": false,
+  "days": [
+    {
+      "date": "2026-10-23",
+      "suhurEnd": "05:00",
+      "fajrInMosque": "05:30",
+      "sunrise": "07:00",
+      "zawal": "11:30",
+      "dhuhr": "12:00",
+      "asr": "15:10",
+      "maghrib": "17:20",
+      "isha": "18:50"
+    }
+  ]
+}
