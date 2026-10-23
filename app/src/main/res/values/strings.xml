@@ -1,0 +1,31 @@
+<resources>
+    <string name="app_name">Нур Ислам</string>
+    <string name="city">Казан · Казань</string>
+    <string name="next_prayer">Киләсе намаз · Следующий намаз</string>
+    <string name="prayer_time">Вакыты · Время</string>
+    <string name="remaining">Калган вакыт · Осталось</string>
+    <string name="demo_label">TEST / DEMO · Времена не утверждены</string>
+    <string name="unavailable">Расписание недоступно</string>
+    <string name="unavailable_detail">Нет утверждённых данных на %1$s</string>
+    <string name="no_next">Нет данных о следующем намазе</string>
+    <string name="no_next_detail">Ожидается расписание на следующий день</string>
+    <string name="suhur_tt">Сәхәр тәмам</string><string name="suhur_ru">Завершение сухура</string>
+    <string name="fajr_tt">Иртәнге</string><string name="fajr_ru">Фаджр (в мечети)</string>
+    <string name="sunrise_tt">Кояш чыгу</string><string name="sunrise_ru">Восход</string>
+    <string name="zawal_tt">Зәвәл</string><string name="zawal_ru">Зенит</string>
+    <string name="dhuhr_tt">Өйлә</string><string name="dhuhr_ru">Зухр</string>
+    <string name="asr_tt">Икенде</string><string name="asr_ru">Аср</string>
+    <string name="maghrib_tt">Ахшам</string><string name="maghrib_ru">Магриб</string>
+    <string name="isha_tt">Ястү</string><string name="isha_ru">Иша</string>
+    <string name="debug_menu">Диагностика экрана · DEBUG</string>
+    <string name="debug_hint">MENU / M · диагностика</string>
+    <string name="mode_auto">AUTO · по размеру окна</string>
+    <string name="mode_native">PORTRAIT_NATIVE · портрет</string>
+    <string name="mode_cw">PORTRAIT_ROTATE_CW · +90°</string>
+    <string name="mode_ccw">PORTRAIT_ROTATE_CCW · −90°</string>
+    <string name="mode_landscape">LANDSCAPE · горизонтальный ТВ</string>
+    <string name="debug_live">Показать живые часы</string>
+    <string name="debug_freeze">Демо: 23.10.2026, 14:20</string>
+    <string name="debug_frozen">TEST / DEMO · 23.10.2026 14:20 · часы остановлены</string>
+    <string name="close">Закрыть</string>
+</resources>
