@@ -30,8 +30,10 @@ class MainActivityTest {
         compose.activityRule.scenario.recreate()
         compose.onRoot().performKeyInput { pressKey(Key.Menu) }
         compose.onNodeWithText("✓ PORTRAIT_ROTATE_CW · +90°").assertIsDisplayed()
-        // The menu is now rotated: physical LEFT moves down in logical portrait coordinates.
+        // UP/DOWN keep working on a remote held upright; LEFT is also a rotated-axis alias.
         compose.onRoot().performKeyInput {
+            pressKey(Key.DirectionDown)
+            pressKey(Key.DirectionUp)
             repeat(3) { pressKey(Key.DirectionLeft) }
             pressKey(Key.Enter)
         }

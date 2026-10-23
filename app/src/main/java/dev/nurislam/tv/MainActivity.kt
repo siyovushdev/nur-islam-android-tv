@@ -77,8 +77,8 @@ class MainActivity : ComponentActivity() {
                             val up = when (rotation) { 90f -> AndroidKeyEvent.KEYCODE_DPAD_RIGHT; -90f -> AndroidKeyEvent.KEYCODE_DPAD_LEFT; else -> AndroidKeyEvent.KEYCODE_DPAD_UP }
                             when (event.nativeKeyEvent.keyCode) {
                                 AndroidKeyEvent.KEYCODE_BACK -> menu = false
-                                down -> selection = (selection + 1) % 7
-                                up -> selection = (selection + 6) % 7
+                                AndroidKeyEvent.KEYCODE_DPAD_DOWN, down -> selection = (selection + 1) % 7
+                                AndroidKeyEvent.KEYCODE_DPAD_UP, up -> selection = (selection + 6) % 7
                                 AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_NUMPAD_ENTER -> select(selection)
                             }
                             true
