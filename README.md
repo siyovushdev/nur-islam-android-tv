@@ -22,6 +22,7 @@
 - [Вопросы к расписанию и исходным примерам](docs/DATA_NOTES.md)
 - [Дизайн-спецификация](design/DESIGN_SPEC.md) и [визуальная SVG-схема](design/REFERENCE_LAYOUT.svg)
 - [Формат сменяемого расписания](docs/SCHEDULE_FORMAT.md)
+- [Мастер первого запуска HOME / Device Owner / Lock Task](docs/FIRST_RUN_AND_KIOSK.md) — [Issue #11](https://github.com/siyovushdev/nur-islam-android-tv/issues/11)
 - **[Текущая конечная цель для Codex](docs/CODEX_MVP_GOAL.md)**
 - [Две темы и настройки](design/THEMES_AND_SETTINGS.md) ([Classic](design/CLASSIC_REFERENCE.svg), [Elegant](design/reference_original.png))
 - [Этап 1 — архивный промт](docs/CODEX_STAGE_1.md)
