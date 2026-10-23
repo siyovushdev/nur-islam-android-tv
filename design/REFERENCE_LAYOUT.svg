@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Native Compose visual reference ONLY. This file is NOT Android UI source. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920" role="img" aria-label="Нур Ислам — концепция вертикального табло намазов">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.2" y2="1">
+      <stop offset="0" stop-color="#063526"/><stop offset="0.52" stop-color="#06442f"/><stop offset="1" stop-color="#04241c"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#0a4b37"/><stop offset="1" stop-color="#053126"/>
+    </linearGradient>
+    <linearGradient id="highlight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#195a46"/><stop offset="1" stop-color="#094434"/>
+    </linearGradient>
+    <radialGradient id="halo">
+      <stop offset="0" stop-color="#32735a" stop-opacity=".44"/><stop offset="1" stop-color="#32735a" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="geometry" width="56" height="56" patternUnits="userSpaceOnUse">
+      <path d="M28 0L56 28L28 56L0 28Z M0 0L56 56 M56 0L0 56" stroke="#bd9957" stroke-width="1.2" stroke-opacity=".16" fill="none"/>
+    </pattern>
+    <style><![CDATA[
+      text{font-family:"DejaVu Serif",Georgia,serif;fill:#f6efd9}
+      .sans{font-family:"DejaVu Sans",Arial,sans-serif}
+      .secondary{fill:#b9c8b9}
+      .gold{fill:#e6c37b}
+      .time{font-variant-numeric:tabular-nums}
+    ]]></style>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#bg)"/>
+  <rect width="1080" height="1920" fill="url(#geometry)"/>
+  <rect x="70" y="110" width="940" height="1660" rx="40" fill="#052f24" fill-opacity=".87" stroke="#b69a65" stroke-width="2" stroke-opacity=".45"/>
+  <!-- Architectural arch, restrained rather than photographic -->
+  <path d="M91 425V285Q91 244 132 224Q177 203 197 163Q220 111 284 111H796Q860 111 883 163Q903 203 948 224Q989 244 989 285V425"
+        stroke="#d1b174" stroke-width="7" fill="none" opacity=".8"/>
+  <rect x="90" y="438" width="900" height="230" fill="url(#halo)"/>
+  <g fill="#cdb377" opacity=".85">
+    <path d="M507 81c-23 19-26 51-3 76s58 25 79 1c-31 9-65-19-66-47-1-11 2-22 7-30z"/>
+    <path d="M594 101l6 15 16 1-12 11 4 16-14-9-14 9 5-16-12-11 16-1z"/>
+  </g>
+  <text x="540" y="226" font-size="78" font-weight="700" text-anchor="middle">Нур Ислам</text>
+  <text x="540" y="279" font-size="35" text-anchor="middle" class="secondary">Казан · Казань</text>
+  <text x="540" y="475" font-size="190" font-weight="700" text-anchor="middle" class="time">14:20</text>
+  <text x="540" y="533" font-size="35" font-weight="700" text-anchor="middle">Җомга, 23 октябрь 2026</text>
+  <text x="540" y="575" font-size="27" text-anchor="middle" class="secondary">Пятница, 23 октября 2026</text>
+  <text x="540" y="618" font-size="23" text-anchor="middle" class="secondary">Дата по хиджре · после подтверждения источника</text>
+  <path d="M254 667H826" stroke="#cbae71" stroke-width="2" opacity=".65"/>
+  <path d="M540 653l14 14-14 14-14-14z" fill="#cbae71"/>
+
+  <!-- Next prayer panel -->
+  <rect x="92" y="708" width="896" height="320" rx="34" fill="url(#card)" stroke="#ddba72" stroke-width="4"/>
+  <rect x="108" y="725" width="864" height="288" rx="29" fill="none" stroke="#a9915e" stroke-width="1" opacity=".5"/>
+  <text x="540" y="763" font-size="29" text-anchor="middle" class="gold">Киләсе намаз · Следующий намаз</text>
+  <text x="540" y="833" font-size="65" font-weight="700" text-anchor="middle">Икенде · Аср</text>
+  <line x1="540" y1="866" x2="540" y2="994" stroke="#bb995b" stroke-width="2"/>
+  <text x="334" y="888" font-size="26" text-anchor="middle" class="secondary">Время намаза</text>
+  <text x="738" y="888" font-size="26" text-anchor="middle" class="secondary">Осталось</text>
+  <text x="334" y="967" font-size="70" font-weight="700" text-anchor="middle" class="gold time">15:15</text>
+  <text x="738" y="967" font-size="60" font-weight="700" text-anchor="middle" class="gold time">00:55:00</text>
+
+  <!-- Calendar -->
+  <rect x="92" y="1052" width="896" height="724" rx="30" fill="#05291f" fill-opacity=".97" stroke="#9d8e62" stroke-opacity=".55" stroke-width="2"/>
+  <rect x="105" y="1458" width="870" height="84" rx="14" fill="url(#highlight)" stroke="#e6c37b" stroke-width="3"/>
+  <g stroke="#acc0ae" stroke-opacity=".18">
+    <path d="M114 1142H966M114 1225H966M114 1308H966M114 1391H966M114 1457H966M114 1542H966M114 1625H966M114 1708H966"/>
+  </g>
+  <g font-size="30" font-weight="700">
+    <text x="160" y="1119" class="secondary">Сәхәр тәмам</text><text x="902" y="1120" text-anchor="end" class="secondary time">05:08</text>
+    <text x="160" y="1201">Иртәнге</text><text x="902" y="1202" text-anchor="end" class="time">05:30</text>
+    <text x="160" y="1284" class="secondary">Кояш чыгу</text><text x="902" y="1285" text-anchor="end" class="secondary time">07:12</text>
+    <text x="160" y="1367" class="secondary">Зәвәл</text><text x="902" y="1368" text-anchor="end" class="secondary time">11:40</text>
+    <text x="160" y="1440">Өйлә</text><text x="902" y="1440" text-anchor="end" class="time">12:05</text>
+    <text x="160" y="1499" class="gold">Икенде</text><text x="902" y="1510" text-anchor="end" class="gold time">15:15</text>
+    <text x="160" y="1597">Ахшам</text><text x="902" y="1598" text-anchor="end" class="time">17:48</text>
+    <text x="160" y="1680">Ястү</text><text x="902" y="1681" text-anchor="end" class="time">19:02</text>
+  </g>
+  <g font-size="21" class="sans secondary">
+    <text x="160" y="1138">Завершение сухура</text>
+    <text x="160" y="1220">Фаджр (в мечети)</text>
+    <text x="160" y="1303">Восход солнца</text>
+    <text x="160" y="1386">Зенит</text>
+    <text x="160" y="1454">Зухр</text>
+    <text x="160" y="1532" class="gold">Аср</text>
+    <text x="160" y="1616">Магриб</text>
+    <text x="160" y="1699">Иша</text>
+  </g>
+  <text x="540" y="1844" text-anchor="middle" class="sans secondary" font-size="21">Эскиз интерфейса · пример данных, не расписание мечети</text>
+</svg>
