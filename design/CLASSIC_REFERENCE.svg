@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Nur Islam Classic reference: derived from visual language of v22 HTML, not web UI code -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920" role="img" aria-label="Нур Ислам — Classic Minimal theme, portrait visual specification">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#0B512B"/><stop offset=".52" stop-color="#084F26"/><stop offset="1" stop-color="#06391F"/>
+  </linearGradient>
+  <style><![CDATA[
+    text { font-family:Arial,"DejaVu Sans",sans-serif; }
+    .numbers { font-variant-numeric:tabular-nums; }
+  ]]></style>
+</defs>
+<rect width="1080" height="1920" fill="url(#bg)"/>
+<path d="M525 86C488 107 482 156 509 183C535 209 575 205 597 176C558 189 518 152 525 86Z" fill="#FFD76A"/>
+<path d="M623 103l8 20 22 1-17 14 5 22-18-12-19 12 6-22-17-14 22-1Z" fill="#FFD76A"/>
+<text x="540" y="270" font-weight="700" font-size="75" fill="#FFD76A" text-anchor="middle">Нур Ислам</text>
+<text x="540" y="323" font-size="30" fill="#DDE5D7" text-anchor="middle">Казан · Казань</text>
+<path d="M348 348H732" stroke="#FFD76A" opacity=".58" stroke-width="2"/>
+<text x="540" y="445" font-size="39" fill="#F4EFE3" font-weight="700" text-anchor="middle">Җомга, 23 октябрь 2026</text>
+<text x="540" y="494" font-size="26" fill="#BFC9BF" text-anchor="middle">Пятница, 23 октября 2026</text>
+<text x="540" y="689" font-size="196" font-weight="700" fill="#FFFFFF" text-anchor="middle" class="numbers">14:20</text>
+<text x="540" y="746" font-size="28" fill="#E8F0E6" text-anchor="middle">Киләсе намаз · Следующий намаз</text>
+<text x="540" y="810" font-size="55" font-weight="700" fill="#FFFFFF" text-anchor="middle">Икенде · Аср</text>
+<text x="540" y="884" font-size="80" font-weight="700" fill="#FFD76A" text-anchor="middle" class="numbers">00:55:00</text>
+<text x="540" y="933" font-size="29" fill="#EBE1CA" text-anchor="middle">Вакыты / Время 15:15</text>
+<rect x="85" y="1000" width="910" height="91" rx="22" fill="#082F1D" fill-opacity=".65" stroke="#C6AA61" stroke-opacity=".42" stroke-width="1.5"/>
+<text x="132" y="1040" font-size="33" font-weight="700" fill="#F5EAD0">Сәхәр тәмам</text>
+<text x="132" y="1071" font-size="23" fill="#C1CBBE">Завершение сухура</text>
+<text x="949" y="1061" font-size="52" font-weight="700" fill="#FFD76A" text-anchor="end" class="numbers">05:08</text>
+<rect x="85" y="1099" width="910" height="91" rx="22" fill="#082F1D" fill-opacity=".65" stroke="#C6AA61" stroke-opacity=".42" stroke-width="1.5"/>
+<text x="132" y="1139" font-size="33" font-weight="700" fill="#F5EAD0">Иртәнге</text>
+<text x="132" y="1170" font-size="23" fill="#C1CBBE">Фаджр (в мечети)</text>
+<text x="949" y="1160" font-size="52" font-weight="700" fill="#FFD76A" text-anchor="end" class="numbers">05:30</text>
+<rect x="85" y="1198" width="910" height="91" rx="22" fill="#082F1D" fill-opacity=".65" stroke="#C6AA61" stroke-opacity=".42" stroke-width="1.5"/>
+<text x="132" y="1238" font-size="33" font-weight="700" fill="#F5EAD0">Кояш чыгу</text>
+<text x="132" y="1269" font-size="23" fill="#C1CBBE">Восход</text>
+<text x="949" y="1259" font-size="52" font-weight="700" fill="#FFD76A" text-anchor="end" class="numbers">07:12</text>
+<rect x="85" y="1297" width="910" height="91" rx="22" fill="#082F1D" fill-opacity=".65" stroke="#C6AA61" stroke-opacity=".42" stroke-width="1.5"/>
+<text x="132" y="1337" font-size="33" font-weight="700" fill="#F5EAD0">Зәвәл</text>
+<text x="132" y="1368" font-size="23" fill="#C1CBBE">Зенит</text>
+<text x="949" y="1358" font-size="52" font-weight="700" fill="#FFD76A" text-anchor="end" class="numbers">11:40</text>
+<rect x="85" y="1396" width="910" height="91" rx="22" fill="#082F1D" fill-opacity=".65" stroke="#C6AA61" stroke-opacity=".42" stroke-width="1.5"/>
+<text x="132" y="1436" font-size="33" font-weight="700" fill="#F5EAD0">Өйлә</text>
+<text x="132" y="1467" font-size="23" fill="#C1CBBE">Зухр</text>
+<text x="949" y="1457" font-size="52" font-weight="700" fill="#FFD76A" text-anchor="end" class="numbers">12:05</text>
+<rect x="85" y="1495" width="910" height="91" rx="22" fill="#FDD76A" fill-opacity="1" stroke="#F9DC8F" stroke-opacity="1" stroke-width="2"/>
+<text x="132" y="1535" font-size="33" font-weight="700" fill="#123B24">Икенде</text>
+<text x="132" y="1566" font-size="23" fill="#28583A">Аср</text>
+<text x="949" y="1556" font-size="52" font-weight="700" fill="#123B24" text-anchor="end" class="numbers">15:15</text>
+<rect x="85" y="1594" width="910" height="91" rx="22" fill="#082F1D" fill-opacity=".65" stroke="#C6AA61" stroke-opacity=".42" stroke-width="1.5"/>
+<text x="132" y="1634" font-size="33" font-weight="700" fill="#F5EAD0">Ахшам</text>
+<text x="132" y="1665" font-size="23" fill="#C1CBBE">Магриб</text>
+<text x="949" y="1655" font-size="52" font-weight="700" fill="#FFD76A" text-anchor="end" class="numbers">17:48</text>
+<rect x="85" y="1693" width="910" height="91" rx="22" fill="#082F1D" fill-opacity=".65" stroke="#C6AA61" stroke-opacity=".42" stroke-width="1.5"/>
+<text x="132" y="1733" font-size="33" font-weight="700" fill="#F5EAD0">Ястү</text>
+<text x="132" y="1764" font-size="23" fill="#C1CBBE">Иша</text>
+<text x="949" y="1754" font-size="52" font-weight="700" fill="#FFD76A" text-anchor="end" class="numbers">19:02</text>
+<text x="540" y="1856" font-size="22" fill="#E1C177" opacity=".8" text-anchor="middle">ДЕМО · числа только для дизайна</text>
+</svg>
