@@ -57,6 +57,8 @@ class PhoneActivityTest {
         assertFalse(info.receivers.orEmpty().any { it.name.endsWith("MosqueDeviceAdmin") })
         assertFalse(info.activities.orEmpty().any { it.name.endsWith("ProvisioningActivity") })
         assertFalse(info.requestedPermissions.orEmpty().contains("android.permission.INTERNET"))
+        assertEquals(0, compose.activity.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        assertEquals(0, compose.activity.window.decorView.systemUiVisibility and android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
         compose.onNodeWithTag("phone-settings").assertIsDisplayed()
         compose.onNodeWithText("Пропустить и открыть табло").assertDoesNotExist()
         openSettings()
