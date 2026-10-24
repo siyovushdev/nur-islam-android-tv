@@ -48,6 +48,7 @@ fun AdminPanel(
     focusToken: Any? = null,
     touchMode: Boolean = false,
     appliedSchedule: ValidatedSchedule? = null,
+    iqamahCalendarNotice: String? = null,
     onSettings: ((AppSettings) -> AppSettings) -> Unit,
     onOrientation: (DisplayMode) -> Unit,
     onPickFile: () -> Unit,
@@ -58,6 +59,7 @@ fun AdminPanel(
     onDismissMessage: () -> Unit,
     onTimeSettings: () -> Unit = {},
     onDeviceSetup: (() -> Unit)? = null,
+    onIqamah: (() -> Unit)? = null,
     onHomeSettings: () -> Unit,
     onOtherLauncher: () -> Unit,
     onClose: () -> Unit,
@@ -96,7 +98,7 @@ fun AdminPanel(
     if (appliedSchedule != null) {
         ScheduleImportResult(appliedSchedule, touchMode, onBoard = onClose, onDismiss = {
             onDismissMessage(); navigate(AdminPage.SCHEDULE)
-        })
+        }, iqamahNotice = iqamahCalendarNotice)
         return
     }
     if (candidate != null && message == null) {
@@ -120,7 +122,7 @@ fun AdminPanel(
             AdminItem("Расписание", data?.let { "Последний импорт: ${it.metadata.year} · ${it.metadata.revision}" } ?: "Нет утверждённого календаря") { navigate(AdminPage.SCHEDULE) },
             AdminItem("Диагностика") { navigate(AdminPage.DIAGNOSTICS) },
             if (touchMode) null else AdminItem("Основной экран HOME / безопасный выход") { navigate(AdminPage.HOME) },
-            AdminItem("Икамат: не настроен", "Нужны утверждённые правила мечети. Автоматические интервалы отключены.", false) {},
+            AdminItem("Икамат", "Отдельные правила, даты изменений и исключения. Без вымышленных интервалов.", onIqamah != null) { onIqamah?.invoke() },
         )
         page == AdminPage.DISPLAY -> listOf(AdminItem("Назад") { navigate(AdminPage.SETTINGS) }) + DisplayMode.entries.map { mode ->
             val label = stringResource(when (mode) {

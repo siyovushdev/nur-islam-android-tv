@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.nurislam.tv.R
 import dev.nurislam.tv.domain.*
+import dev.nurislam.tv.iqamah.*
 import dev.nurislam.tv.model.*
 import dev.nurislam.tv.settings.BoardLanguage
 import java.time.Instant
@@ -36,6 +37,7 @@ fun PrayerBoardScreen(
     demo: Boolean,
     status: PrayerStatus? = null,
     notice: String? = null,
+    iqamah: IqamahStatus? = null,
 ) {
     // TextAutoSize keeps measurement state. Recreate only the visual subtree when
     // changing typeface/palette; keep the clock, calendar and settings outside it.
@@ -60,7 +62,7 @@ fun PrayerBoardScreen(
                 Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Header(scale, Modifier.weight(.26f))
                     ClockAndDate(minute, date, scale, Modifier.weight(.32f))
-                    NextPrayerCard(next, now, day, date, scale, Modifier.weight(.32f), status)
+                    NextPrayerCard(next, now, day, date, scale, Modifier.weight(.32f), status, iqamah)
                     Footer(demo, scale, Modifier.weight(.10f), notice)
                 }
                 ScheduleTable(day, next, scale, Modifier.weight(1f).fillMaxHeight().padding(vertical = (26 * scale).dp))
@@ -69,10 +71,18 @@ fun PrayerBoardScreen(
             Column(safe, horizontalAlignment = Alignment.CenterHorizontally) {
                 Header(scale, Modifier.weight(.15f))
                 ClockAndDate(minute, date, scale, Modifier.weight(.215f))
-                NextPrayerCard(next, now, day, date, scale, Modifier.weight(.19f), status)
+                NextPrayerCard(next, now, day, date, scale, Modifier.weight(.19f), status, iqamah)
                 Spacer(Modifier.weight(.015f))
                 ScheduleTable(day, next, scale, Modifier.weight(.38f))
                 Footer(demo, scale, Modifier.weight(.05f), notice)
+            }
+        }
+        if (iqamah is IqamahStatus.Now && iqamah.dim) {
+            Column(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .86f)).padding(24.dp).testTag("iqamah-dim"),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                BoardText(if (iqamah.event.demo) "ТЕСТОВЫЙ ИКАМАТ" else "ИКАМАТ", 120f, scale, Modifier.fillMaxWidth().height((180 * scale).dp), colors.Gold, bold = true)
+                BoardText(iqamah.event.prayer.title, 76f, scale, Modifier.fillMaxWidth().height((120 * scale).dp), colors.Text, bold = true)
+                BoardText("Настройки доступны с пульта / кнопки телефона", 26f, scale, Modifier.fillMaxWidth().height((60 * scale).dp), colors.Secondary)
             }
         }
     }
@@ -106,7 +116,7 @@ private fun ClockAndDate(minute: Instant, date: LocalDate, s: Float, modifier: M
 }
 
 @Composable
-private fun NextPrayerCard(next: NextPrayer?, now: State<Instant>, day: DaySchedule?, date: LocalDate, s: Float, modifier: Modifier, status: PrayerStatus?) {
+private fun NextPrayerCard(next: NextPrayer?, now: State<Instant>, day: DaySchedule?, date: LocalDate, s: Float, modifier: Modifier, status: PrayerStatus?, iqamah: IqamahStatus?) {
     val colors = LocalBoardAppearance.current
     val shape = RoundedCornerShape((BoardSpacing.PanelRadius * s).dp)
     Column(
@@ -114,8 +124,22 @@ private fun NextPrayerCard(next: NextPrayer?, now: State<Instant>, day: DaySched
             .border((if (colors.ornate) 2.5f * s else 0f).dp, if (colors.ornate) colors.Outline else Color.Transparent, shape).padding((18 * s).dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        BoardText(boardLanguage(stringResource(R.string.next_prayer)), 34f, s, Modifier.fillMaxWidth().weight(.20f), color = colors.Gold)
-        if (next == null) {
+        val event = when (iqamah) { is IqamahStatus.Waiting -> iqamah.event; is IqamahStatus.Now -> iqamah.event; is IqamahStatus.Idle -> iqamah.upcoming; else -> null }
+        val activeIqamah = iqamah is IqamahStatus.Waiting || iqamah is IqamahStatus.Now
+        val heading = when (iqamah) {
+            is IqamahStatus.Waiting -> if (iqamah.event.demo) "До икамата · ТЕСТ" else "До икамата"
+            is IqamahStatus.Now -> if (iqamah.event.demo) "ТЕСТОВЫЙ ИКАМАТ" else "ИКАМАТ"
+            else -> boardLanguage(stringResource(R.string.next_prayer)) + if (event != null) "\n${if (event.demo) "ТЕСТ · " else ""}Икамат ${event.prayer.title}: ${formatTime(event.at.atZone(MoscowZone).toLocalTime())}${if (event.start == null) " · начало не подтверждено" else ""}" else if (iqamah != null) "\n${(iqamah as IqamahStatus.Idle).detail}" else ""
+        }
+        BoardText(heading, if (iqamah == null) 34f else if (activeIqamah) 36f else 30f, s, Modifier.fillMaxWidth().weight(.20f).testTag("iqamah-heading"), color = colors.Gold, lines = if (iqamah == null || activeIqamah) 1 else 2)
+        if (activeIqamah && event != null) {
+            BoardText(event.prayer.title, 76f, s, Modifier.fillMaxWidth().weight(.36f), bold = true)
+            Row(Modifier.fillMaxWidth().weight(.44f), verticalAlignment = Alignment.CenterVertically) {
+                BoardText(formatTime(event.at.atZone(MoscowZone).toLocalTime()), 76f, s, Modifier.weight(1f).fillMaxHeight().testTag("iqamah-time"), color = colors.Gold, digits = true)
+                if (iqamah is IqamahStatus.Waiting) Countdown(now, event.at, s, Modifier.weight(1.25f).fillMaxHeight())
+                else BoardText("Икамат", 72f, s, Modifier.weight(1.25f).fillMaxHeight().testTag("iqamah-arrival"), color = colors.Gold, bold = true)
+            }
+        } else if (next == null) {
             val title = when {
                 status is PrayerStatus.FajrUnconfirmed -> statusLabel(R.string.fajr_uncertain_tt, R.string.fajr_uncertain)
                 day == null -> statusLabel(R.string.unavailable_tt, R.string.unavailable)

@@ -22,6 +22,14 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as NurIslamApplication
     val settings = app.settings.state
     val schedules = app.schedules.state
+    val iqamah = app.iqamah.state
+    private val clockGuard = dev.nurislam.tv.iqamah.IqamahClockGuard()
+    private val mutableClockProblem = MutableStateFlow(false)
+    val clockProblem = mutableClockProblem.asStateFlow()
+    fun sampleClock(now: java.time.Instant, elapsed: Long) { clockGuard.sample(now, elapsed); mutableClockProblem.value = clockGuard.problem }
+    fun confirmClock(now: java.time.Instant, elapsed: Long) { clockGuard.confirm(now, elapsed); mutableClockProblem.value = false }
+    fun saveIqamah(config: dev.nurislam.tv.iqamah.IqamahConfig) = operation { app.iqamah.save(config) }
+    fun rollbackIqamah() = operation { app.iqamah.rollback() }
     private val mutableCandidate = MutableStateFlow<ValidatedSchedule?>(null)
     val candidate = mutableCandidate.asStateFlow()
     private val mutableMessage = MutableStateFlow<String?>(null)

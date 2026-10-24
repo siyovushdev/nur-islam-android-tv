@@ -187,4 +187,36 @@ class PhoneActivityTest {
         screenshot("test-schedule-banner")
     }
 
+    @Test fun iqamahEditorSavesThroughActualViewModelAndRestoresAfterRecreation() {
+        val year = Instant.now().atZone(MoscowZone).year
+        runBlocking { app.schedules.apply(ScheduleFixtures.schedule(year, meaning = "PRAYER_START")) }
+        compose.waitUntil(10_000) { app.iqamah.state.value.loaded }
+        openSettings(); tap("Икамат")
+        compose.onNodeWithTag("prayer-board").assertDoesNotExist()
+        fun iqaTap(text: String) {
+            compose.onNodeWithTag("iqamah-list").performScrollToNode(hasText(text))
+            compose.onNodeWithText(text).performClick(); waitIo()
+        }
+        iqaTap("Функция икамата"); iqaTap("Аср"); iqaTap("Режим: Отключено")
+        iqaTap("Значение: не задано")
+        compose.onNodeWithTag("iqamah-number").performTextReplacement("1630")
+        compose.onNodeWithText("Применить ввод").performClick()
+        iqaTap("Добавить в черновик")
+        compose.onNodeWithTag("iqamah-save").performClick()
+        iqaTap("Подтвердить сохранение")
+        compose.onNodeWithText("Правила сохранены").assertIsDisplayed()
+        iqaTap("Вернуться к табло")
+        compose.onNodeWithTag("test-schedule-banner").assertTextContains("ТЕСТОВЫЙ ИКАМАТ", substring = true)
+        assertEquals(990, app.iqamah.state.value.config.rules.single().value)
+        val repo = dev.nurislam.tv.iqamah.IqamahRepository(dev.nurislam.tv.data.AtomicScheduleStorage(File(app.filesDir, "iqamah-store.json")))
+        runBlocking { repo.load() }
+        assertEquals(app.iqamah.state.value.config, repo.state.value.config)
+        compose.activityRule.scenario.recreate()
+        compose.onNodeWithTag("test-schedule-banner").assertTextContains("ТЕСТОВЫЙ ИКАМАТ", substring = true)
+        openSettings(); tap("Икамат")
+        iqaTap("Сегодня: начало / икамат / правило")
+        compose.onNodeWithText("Начало: не подтверждено · Икамат: 16:30", substring = true).performScrollTo().assertIsDisplayed()
+        screenshot("iqamah-today")
+    }
+
 }

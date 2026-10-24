@@ -31,6 +31,7 @@ android {
     sourceSets.getByName("testDebug").java.srcDir("src/sharedTest/java")
     sourceSets.getByName("testDebug").java.srcDir("src/acceptanceTest/java")
     sourceSets.getByName("testRelease").java.srcDir("src/acceptanceTest/java")
+    listOf("testDebug", "testRelease", "testPhoneDebug").forEach { sourceSets.getByName(it).java.srcDir("src/iqamahUiTest/java") }
     testOptions {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
