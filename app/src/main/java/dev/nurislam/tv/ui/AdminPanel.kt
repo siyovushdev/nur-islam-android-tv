@@ -57,6 +57,7 @@ fun AdminPanel(
     onDismissCandidate: () -> Unit,
     onDismissMessage: () -> Unit,
     onTimeSettings: () -> Unit = {},
+    onDeviceSetup: (() -> Unit)? = null,
     onHomeSettings: () -> Unit,
     onOtherLauncher: () -> Unit,
     onClose: () -> Unit,
@@ -145,9 +146,10 @@ fun AdminPanel(
         }
         page == AdminPage.HOME -> listOf(
             AdminItem("Назад") { navigate(AdminPage.SETTINGS) },
+            AdminItem("Мастер HOME / kiosk", "Проверка HOME, Device Owner, пробный Lock Task и восстановление Launcher.", onDeviceSetup != null) { onDeviceSetup?.invoke() },
             AdminItem("Выбрать основной HOME-экран", "Откроются настройки Android. Выбор делает администратор; не все TV поддерживают смену HOME.") { onHomeSettings() },
             AdminItem("Открыть другой лаунчер", "Выберите установленный основной экран. Это не отменяет HOME по умолчанию.") { onOtherLauncher() },
-            AdminItem("Как отключить автозапуск", "В системных настройках назначьте штатный HOME. При отсутствии пункта используйте ADB: инструкции в docs/TV_OPERATIONS.md. Kiosk/Device Owner не включаются.", false) {},
+            AdminItem("Как отключить автозапуск", "Сначала мастер HOME / kiosk → отключить kiosk → восстановить Launcher. Затем назначьте штатный HOME в Android. Инструкция: docs/TV_SETUP.md.", false) {},
         )
         else -> listOf(
             AdminItem("Назад") { navigate(AdminPage.SETTINGS) },

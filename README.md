@@ -6,7 +6,7 @@
 
 ## Пользование
 
-1. Откройте «Нур Ислам» в TV Launcher. В первые 15 секунд показывается подсказка входа.
+1. После установки откройте «Нур Ислам» в TV Launcher. Появится мастер HOME / kiosk; его можно пропустить. [Установка и первый запуск без ADB](docs/TV_SETUP.md). После завершения мастер доступен из настроек HOME; на табло первые 15 секунд показывается подсказка входа.
 2. **Нажмите OK пять раз за пять секунд**, затем выберите «Открыть настройки администратора». Работает без MENU, клавиатуры и сенсорного экрана; MENU также поддерживается.
 3. UP/DOWN — выбор, OK — действие, BACK — назад/к табло. Имена редактируются встроенной клавиатурой с четырьмя направлениями D-pad; «Готово» сохраняет, BACK отменяет.
 4. Выберите Elegant / Classic, язык (татарский, русский, оба), масштаб 85/100/115%, подписи и режим экрана. Темы переключаются без рестарта и не меняют расписание.
@@ -60,7 +60,8 @@ UI-проверки работают через Robolectric / native Skia, в т
 
 ## Документы
 
-- [Мастер первого запуска HOME / Device Owner / Lock Task](docs/FIRST_RUN_AND_KIOSK.md) — [Issue #11](https://github.com/siyovushdev/nur-islam-android-tv/issues/11)
+- [Установка с пульта, HOME, kiosk и восстановление Launcher](docs/TV_SETUP.md)
+- [Требования мастера первого запуска HOME / Device Owner / Lock Task](docs/FIRST_RUN_AND_KIOSK.md) — [Issue #11](https://github.com/siyovushdev/nur-islam-android-tv/issues/11)
 - [Цель и критерии MVP](docs/CODEX_MVP_GOAL.md)
 - [ТЗ](docs/TZ_DRAFT.md), [план](docs/ROADMAP.md), [спорные исходные данные](docs/DATA_NOTES.md)
 - [Темы и настройки](design/THEMES_AND_SETTINGS.md), [Elegant PNG](design/reference_original.png), [Classic SVG](design/CLASSIC_REFERENCE.svg)

@@ -2,6 +2,9 @@ package dev.nurislam.tv
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
@@ -23,9 +26,11 @@ import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.delay
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.core.view.WindowCompat
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -37,8 +42,87 @@ import dev.nurislam.tv.model.MoscowZone
 import dev.nurislam.tv.settings.OrientationPreview
 import dev.nurislam.tv.ui.*
 import java.time.temporal.ChronoUnit
+import dev.nurislam.tv.setup.*
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 class MainActivity : ComponentActivity() {
+    private lateinit var deviceSetup: DeviceSetupController
+    private var setupOpen by mutableStateOf(false)
+    private var deviceStatus by mutableStateOf(DeviceStatus("", ""))
+    private var setupMessage by mutableStateOf<String?>(null)
+    private var setupBusy by mutableStateOf(false)
+    private var setupRevision by mutableIntStateOf(0)
+    private var setupJob: Job? = null
+    private val unlockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_USER_PRESENT && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) retryKioskRestore()
+        }
+    }
+    private val homePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        refreshDevice() // RESULT_OK is not evidence that HOME was actually assigned.
+        setupMessage = if (deviceStatus.home) "Нур Ислам назначен HOME. Проверьте перезапуск на вашем ТВ." else "HOME пока не назначен. Запрос отклонён или прошивка не разрешила изменение. Доступны настройки HOME и обычный режим."
+    }
+    private val provisioningPicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        refreshDevice()
+        setupMessage = if (deviceStatus.deviceOwner) "Device Owner подтверждён. HOME и kiosk включаются отдельно в мастере." else "Device Owner не подтверждён. Системный provisioning отменён, недоступен или ещё не завершён."
+    }
+    private fun refreshDevice() {
+        deviceStatus = deviceSetup.access.status()
+        setupRevision++
+    }
+    private fun setupOperation(block: suspend () -> Unit) {
+        if (setupBusy) return
+        setupJob = lifecycleScope.launch {
+            setupBusy = true
+            try { block() }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { setupMessage = e.message ?: "Android не выполнил действие: ${e.javaClass.simpleName}" }
+            finally { setupBusy = false; refreshDevice() }
+        }
+    }
+    private fun openHomeSettings() {
+        try { homePicker.launch(Intent(Settings.ACTION_HOME_SETTINGS)) }
+        catch (_: ActivityNotFoundException) {
+            // Ordinary HOME intent invokes the platform resolver if no default is set.
+            try { homePicker.launch(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)) }
+            catch (_: RuntimeException) { setupMessage = "Системный выбор HOME отсутствует. Откройте настройки приложений ТВ вручную. Смена HOME зависит от прошивки." }
+        }
+        catch (_: SecurityException) { setupMessage = "Прошивка запрещает настройки HOME. Назначение не подтверждено." }
+    }
+    override fun onResume() {
+        super.onResume()
+        if (::deviceSetup.isInitialized) {
+            refreshDevice()
+            retryKioskRestore()
+        }
+    }
+    private fun retryKioskRestore() {
+        // One bounded attempt per resume/unlock event; never interfere with a live setup/trial.
+        if (setupBusy || deviceSetup.trialDeadline != null) return
+        setupOperation {
+            deviceSetup.recoverInterruptedTrial()
+            if (deviceSetup.preferences.kiosk) {
+                deviceSetup.restoreKiosk()
+                setupMessage = null
+            }
+        }
+    }
+    override fun onStart() {
+        super.onStart()
+        ContextCompat.registerReceiver(this, unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT), ContextCompat.RECEIVER_NOT_EXPORTED)
+    }
+    override fun onStop() {
+        unregisterReceiver(unlockReceiver)
+        if (::deviceSetup.isInitialized && deviceSetup.trialDeadline != null) {
+            setupJob?.cancel()
+            try { deviceSetup.cancelTrial() }
+            catch (e: RuntimeException) { setupMessage = "Не удалось завершить пробу: ${e.message}. Повторите отключение kiosk." }
+            refreshDevice()
+        }
+        super.onStop()
+    }
     private val homeRequests = mutableIntStateOf(0)
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -54,6 +138,9 @@ class MainActivity : ComponentActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (hasFocus) fullscreen() }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        deviceSetup = DeviceSetupController(AndroidDeviceAccess(this), SetupPreferences.from(this))
+        setupOpen = !deviceSetup.preferences.completed
+        refreshDevice()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         fullscreen()
         setContent {
@@ -80,7 +167,7 @@ class MainActivity : ComponentActivity() {
                 lifecycle.addObserver(observer)
                 onDispose { lifecycle.removeObserver(observer) }
             }
-            LaunchedEffect(admin, orientation) { if (!admin && orientation == null) focus.requestFocus() }
+            LaunchedEffect(admin, orientation, setupOpen) { if (!admin && orientation == null && !setupOpen) focus.requestFocus() }
             val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) vm.import(uri) }
             fun launchSafely(intent: Intent, failure: String) {
                 try { startActivity(intent) }
@@ -99,7 +186,7 @@ class MainActivity : ComponentActivity() {
                     val next = (status as? PrayerStatus.Upcoming)?.prayer
                     BoxWithConstraints(Modifier.fillMaxSize().background(LocalBoardAppearance.current.Deep)
                         .onPreviewKeyEvent { e ->
-                            if (admin) false else {
+                            if (admin || setupOpen) false else {
                                 val key = e.nativeKeyEvent
                                 when {
                                     key.keyCode == KeyEvent.KEYCODE_MENU && key.action == KeyEvent.ACTION_DOWN -> { admin = true; true }
@@ -115,8 +202,8 @@ class MainActivity : ComponentActivity() {
                         RotatedBoard(mode, Modifier.fillMaxSize()) {
                             Box(Modifier.fillMaxSize()) {
                                 PrayerBoardScreen(minute, now, day, next, resolved == DisplayMode.LANDSCAPE, false, status = status,
-                                    notice = if (schedules.problem != null) stringResource(R.string.storage_notice) else if (showEntryHint) stringResource(R.string.settings_hint) else null)
-                                if (admin) AdminPanel(settings, schedules, candidate, busy, message, BuildConfig.VERSION_NAME,
+                                    notice = if (setupMessage != null && !setupOpen) setupMessage else if (schedules.problem != null) stringResource(R.string.storage_notice) else if (showEntryHint) stringResource(R.string.settings_hint) else null)
+                                if (admin && !setupOpen) AdminPanel(settings, schedules, candidate, busy, message, BuildConfig.VERSION_NAME,
                                     getExternalFilesDir(null)?.absolutePath ?: "Папка недоступна",
                                     focusToken = orientation,
                                     onSettings = { change -> vm.settings(change) },
@@ -129,6 +216,7 @@ class MainActivity : ComponentActivity() {
                                     onInbox = { vm.importInbox() }, onApply = { vm.applyCandidate() }, onRollback = { vm.rollback() },
                                     onDismissCandidate = vm::dismissCandidate, onDismissMessage = vm::dismissMessage,
                                     onTimeSettings = { launchSafely(Intent(Settings.ACTION_DATE_SETTINGS), "Настройки даты и времени недоступны. Откройте системные настройки вручную.") },
+                                    onDeviceSetup = { refreshDevice(); setupOpen = true },
                                     onHomeSettings = {
                                         try { startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) }
                                         catch (_: ActivityNotFoundException) { launchSafely(Intent(Settings.ACTION_SETTINGS), "Системные настройки недоступны. Используйте инструкцию ADB для возврата штатного HOME.") }
@@ -136,6 +224,40 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onOtherLauncher = { launchSafely(Intent.createChooser(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), "Выберите штатный лаунчер").putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(componentName)), "Нет доступного лаунчера. Откройте системные настройки HOME или используйте ADB.") },
                                     onClose = { admin = false; vm.cancelPendingImport(); vm.dismissCandidate(); vm.dismissMessage() })
+                                if (setupOpen) {
+                                    // Revision also tracks non-persistent trial/proof state of the controller.
+                                    @Suppress("UNUSED_VARIABLE") val revision = setupRevision
+                                    DeviceSetupWizard(deviceStatus, deviceSetup.preferences.kiosk, deviceSetup.trialDeadline,
+                                        deviceSetup.exitTested, setupBusy, setupMessage,
+                                        onDismissMessage = { setupMessage = null },
+                                        onAction = { action ->
+                                            setupOperation {
+                                                when (action) {
+                                                    SetupAction.REFRESH -> Unit
+                                                    SetupAction.REQUEST_HOME -> {
+                                                        try { homePicker.launch(deviceSetup.access.homeRequest()) }
+                                                        catch (_: RuntimeException) { openHomeSettings() }
+                                                    }
+                                                    SetupAction.HOME_SETTINGS -> openHomeSettings()
+                                                    SetupAction.MANAGED_HOME -> deviceSetup.setManagedHome()
+                                                    SetupAction.START_TRIAL -> deviceSetup.startTrial()
+                                                    SetupAction.FINISH_TRIAL -> deviceSetup.finishTrialByRemote()
+                                                    SetupAction.CANCEL_TRIAL -> deviceSetup.cancelTrial()
+                                                    SetupAction.ENABLE_KIOSK -> deviceSetup.enableKiosk()
+                                                    SetupAction.DISABLE_KIOSK -> deviceSetup.disableKiosk()
+                                                    SetupAction.RELEASE_HOME -> { deviceSetup.releaseHome(); openHomeSettings() }
+                                                    SetupAction.PROVISION -> {
+                                                        val facts = deviceSetup.access.status()
+                                                        check(facts.provisioningAllowed && facts.legacyProvisioningAvailable && !facts.deviceOwner) { "Первоначальный provisioning сейчас недоступен. Используйте согласованный путь производителя при начальной настройке устройства." }
+                                                        provisioningPicker.launch(deviceSetup.access.legacyProvisioningRequest())
+                                                    }
+                                                    SetupAction.FINISH -> { deviceSetup.preferences.completed(true); setupOpen = false; admin = false }
+                                                    SetupAction.APP_SETTINGS -> { deviceSetup.preferences.completed(true); setupOpen = false; admin = true }
+                                                    SetupAction.TEST_HOME -> { deviceSetup.preferences.completed(true); setupOpen = false; admin = false; startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)) }
+                                                }
+                                            }
+                                        })
+                                }
                                 orientation?.let { preview ->
                                     OrientationConfirmation(preview, onConfirm = {
                                         if (!preview.expired(SystemClock.elapsedRealtime())) vm.settings({ it.copy(displayMode = preview.candidate) }) { orientation = null }
