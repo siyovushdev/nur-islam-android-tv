@@ -112,6 +112,57 @@ class FirstRunActivityTest {
         assertFalse(SetupPreferences.from(compose.activity).kiosk)
         compose.onNodeWithText("Далее: итоговая проверка").assertIsDisplayed()
     }
+    private fun bootWithSavedKioskAndKeyguard() {
+        compose.runOnIdle {
+            val dpm = compose.activity.getSystemService(android.app.admin.DevicePolicyManager::class.java)
+            val admin = android.content.ComponentName(compose.activity, dev.nurislam.tv.setup.MosqueDeviceAdmin::class.java)
+            shadowOf(dpm).setDeviceOwner(admin)
+            dpm.setLockTaskPackages(admin, arrayOf(compose.activity.packageName))
+            SetupPreferences.from(compose.activity).apply { completed(true); kiosk(true) }
+            shadowOf(compose.activity.getSystemService(android.app.KeyguardManager::class.java)).setKeyguardLocked(true)
+        }
+        compose.activityRule.scenario.recreate()
+        assertTrue(SetupPreferences.from(compose.activity).kiosk)
+        assertEquals(android.app.ActivityManager.LOCK_TASK_MODE_NONE, lockState())
+    }
+    @Test fun savedKioskRetriesOnUserPresentWithoutActivityRecreation() {
+        bootWithSavedKioskAndKeyguard()
+        compose.runOnIdle {
+            shadowOf(compose.activity.getSystemService(android.app.KeyguardManager::class.java)).setKeyguardLocked(false)
+            compose.activity.sendBroadcast(Intent(Intent.ACTION_USER_PRESENT))
+        }
+        compose.waitForIdle()
+        assertEquals(android.app.ActivityManager.LOCK_TASK_MODE_LOCKED, lockState())
+        assertTrue(SetupPreferences.from(compose.activity).kiosk)
+        compose.onNodeWithText("Android пока не готов", substring = true).assertDoesNotExist()
+    }
+    @Test fun savedKioskRetriesOnResumeAndNotWhileStopped() {
+        bootWithSavedKioskAndKeyguard()
+        compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+        compose.runOnUiThread {
+            shadowOf(compose.activity.getSystemService(android.app.KeyguardManager::class.java)).setKeyguardLocked(false)
+            compose.activity.sendBroadcast(Intent(Intent.ACTION_USER_PRESENT))
+        }
+        assertEquals(android.app.ActivityManager.LOCK_TASK_MODE_NONE, lockState())
+        compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+        compose.waitForIdle()
+        assertEquals(android.app.ActivityManager.LOCK_TASK_MODE_LOCKED, lockState())
+        assertTrue(SetupPreferences.from(compose.activity).kiosk)
+    }
+    @Test fun revocationWhileWaitingForUnlockDoesNotStartPinningOnLaterEvents() {
+        bootWithSavedKioskAndKeyguard()
+        compose.runOnIdle {
+            val dpm = compose.activity.getSystemService(android.app.admin.DevicePolicyManager::class.java)
+            dpm.setLockTaskPackages(android.content.ComponentName(compose.activity, dev.nurislam.tv.setup.MosqueDeviceAdmin::class.java), emptyArray())
+            shadowOf(compose.activity.getSystemService(android.app.KeyguardManager::class.java)).setKeyguardLocked(false)
+            compose.activity.sendBroadcast(Intent(Intent.ACTION_USER_PRESENT))
+        }
+        compose.waitForIdle()
+        assertFalse(SetupPreferences.from(compose.activity).kiosk)
+        compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+        compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+        assertEquals(android.app.ActivityManager.LOCK_TASK_MODE_NONE, lockState())
+    }
     @Test fun homeTestCompletesSetupAndLaunchesTheRealHomeIntent() {
         key(Key.Back) // summary
         key(Key.DirectionDown); key(Key.Enter)

@@ -6,6 +6,9 @@ import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import dev.nurislam.tv.setup.*
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.CoroutineStart
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -92,6 +95,72 @@ class DeviceSetupControllerTest {
         prefs.kiosk(true)
         fails { DeviceSetupController(device, prefs).restoreKiosk() }
         assertFalse(prefs.kiosk)
+        assertEquals(1, device.starts)
+    }
+    @Test fun temporaryStartFailurePreservesConsentAndRetriesOnlyWhenRequested() = runTest {
+        prefs.kiosk(true)
+        device.facts = device.facts.copy(lockPermitted = true)
+        device.startFailure = IllegalStateException("Android not ready")
+        fails { controller.restoreKiosk() }
+        assertTrue(prefs.kiosk)
+        assertEquals(LOCK_TASK_MODE_NONE, device.facts.lockState)
+        testScheduler.advanceUntilIdle()
+        assertEquals(1, device.starts) // no timer or recursive retry
+        device.startFailure = null
+        controller.restoreKiosk()
+        assertTrue(prefs.kiosk)
+        assertEquals(LOCK_TASK_MODE_LOCKED, device.facts.lockState)
+        controller.restoreKiosk() // already locked: idempotent
+        assertEquals(2, device.starts)
+    }
+    @Test fun unconfirmedRestoreTimesOutAndStopsWithoutLosingConsentOrLooping() = runTest {
+        prefs.kiosk(true)
+        device.facts = device.facts.copy(lockPermitted = true)
+        device.startMode = LOCK_TASK_MODE_PINNED
+        fails { controller.restoreKiosk() }
+        assertTrue(prefs.kiosk)
+        assertEquals(LOCK_TASK_MODE_NONE, device.facts.lockState)
+        testScheduler.advanceUntilIdle()
+        assertEquals(1, device.starts)
+        device.startMode = LOCK_TASK_MODE_LOCKED
+        controller.restoreKiosk()
+        assertEquals(LOCK_TASK_MODE_LOCKED, device.facts.lockState)
+    }
+    @Test fun cancelledRestoreStopsPartialEntryAndPreservesConsentForNextResume() = runTest {
+        prefs.kiosk(true)
+        device.facts = device.facts.copy(lockPermitted = true)
+        device.startMode = LOCK_TASK_MODE_PINNED
+        val attempt = launch(start = CoroutineStart.UNDISPATCHED) { controller.restoreKiosk() }
+        attempt.cancelAndJoin()
+        assertTrue(attempt.isCancelled)
+        assertTrue(prefs.kiosk)
+        assertEquals(LOCK_TASK_MODE_NONE, device.facts.lockState)
+        device.startMode = LOCK_TASK_MODE_LOCKED
+        controller.restoreKiosk()
+        assertEquals(LOCK_TASK_MODE_LOCKED, device.facts.lockState)
+    }
+    @Test fun unknownPermissionIsTemporaryButConfirmedRevocationDisablesRestore() = runTest {
+        prefs.kiosk(true)
+        device.facts = device.facts.copy(problem = "DPM unavailable", lockPermitted = false)
+        fails { controller.restoreKiosk() }
+        assertTrue(prefs.kiosk)
+        assertEquals(0, device.starts)
+        device.facts = device.facts.copy(problem = null)
+        fails { controller.restoreKiosk() }
+        assertFalse(prefs.kiosk)
+        assertEquals(0, device.starts)
+        controller.restoreKiosk()
+        assertEquals(0, device.starts) // revoked: no later pinning attempt
+    }
+    @Test fun revocationBetweenCheckAndStartDoesNotPreserveStaleConsentOrPin() = runTest {
+        prefs.kiosk(true)
+        device.facts = device.facts.copy(lockPermitted = true)
+        device.startFailure = SecurityException("DPC revoked at start")
+        device.revokeAtStart = true
+        fails { controller.restoreKiosk() }
+        assertFalse(prefs.kiosk)
+        assertEquals(LOCK_TASK_MODE_NONE, device.facts.lockState)
+        controller.restoreKiosk()
         assertEquals(1, device.starts)
     }
     @Test fun interruptedTrialIsRecoveredAfterProcessDeathEvenBetweenSaveSteps() = runTest {
@@ -227,6 +296,8 @@ internal class FakeDevice : DeviceAccess {
     var removeCalls = 0
     var clearManagedCalls = 0
     var startMode = LOCK_TASK_MODE_LOCKED
+    var startFailure: RuntimeException? = null
+    var revokeAtStart = false
     var rejectStop = false
     var rejectAllow = false
     var releasedAfterStop = false
@@ -235,7 +306,12 @@ internal class FakeDevice : DeviceAccess {
     override fun legacyProvisioningRequest() = Intent("test.provision")
     override fun allowSelf() { allowCalls++; if (rejectAllow) throw SecurityException("denied"); facts = facts.copy(lockPermitted = true) }
     override fun removeSelf() { removeCalls++; facts = facts.copy(lockPermitted = false) }
-    override fun startLock() { starts++; facts = facts.copy(lockState = startMode) }
+    override fun startLock() {
+        starts++
+        if (revokeAtStart) facts = facts.copy(lockPermitted = false)
+        startFailure?.let { throw it }
+        facts = facts.copy(lockState = startMode)
+    }
     override fun stopLock() { if (rejectStop) throw SecurityException("stop denied"); facts = facts.copy(lockState = LOCK_TASK_MODE_NONE) }
     override fun setManagedHome() { facts = facts.copy(home = true) }
     override fun clearManagedHome() { clearManagedCalls++; releasedAfterStop = facts.lockState == LOCK_TASK_MODE_NONE; facts = facts.copy(home = false) }

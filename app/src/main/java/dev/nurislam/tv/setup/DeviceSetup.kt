@@ -16,6 +16,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import dev.nurislam.tv.MainActivity
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
 
 /** Live facts, never restored from preferences as if they were system permissions. */
 data class DeviceStatus(
@@ -135,8 +136,15 @@ class DeviceSetupController(val access: DeviceAccess, val preferences: SetupPref
         if (!preferences.kiosk) return
         try { startVerified() }
         catch (e: Exception) {
-            try { preferences.kiosk(false) } finally { access.stopLock() }
-            throw e
+            // A failed service query or Keyguard is not evidence of revoked DPC permission.
+            val facts = access.status()
+            val revoked = e !is CancellationException && facts.problem == null && !facts.lockPermitted
+            if (revoked) {
+                try { preferences.kiosk(false) } finally { access.stopLock() }
+            } else access.stopLock()
+            if (e is CancellationException) throw e
+            throw IllegalStateException(if (revoked) "Разрешение Lock Task отозвано. Восстановление kiosk отключено."
+                else "Android пока не готов к kiosk. Согласие сохранено; повторим после разблокировки или возврата в приложение. ${e.message.orEmpty()}", e)
         }
     }
 
@@ -237,11 +245,13 @@ class AndroidDeviceAccess(private val activity: Activity) : DeviceAccess {
                 homeSettingsAvailable = available(Intent(Settings.ACTION_HOME_SETTINGS)),
                 otherHomes = homes,
             )
+            val policy = checkNotNull(dpm) { "DevicePolicyManager недоступен" }
+            val tasks = checkNotNull(context.getSystemService(ActivityManager::class.java)) { "ActivityManager недоступен" }
             result.copy(
-                deviceOwner = dpm?.isDeviceOwnerApp(pkg) == true,
-                lockPermitted = dpm?.isLockTaskPermitted(pkg) == true,
-                lockState = context.getSystemService(ActivityManager::class.java)?.lockTaskModeState ?: ActivityManager.LOCK_TASK_MODE_NONE,
-                provisioningAllowed = dpm?.isProvisioningAllowed(DevicePolicyManager.ACTION_PROVISION_MANAGED_DEVICE) == true,
+                deviceOwner = policy.isDeviceOwnerApp(pkg),
+                lockPermitted = policy.isLockTaskPermitted(pkg),
+                lockState = tasks.lockTaskModeState,
+                provisioningAllowed = policy.isProvisioningAllowed(DevicePolicyManager.ACTION_PROVISION_MANAGED_DEVICE),
                 legacyProvisioningAvailable = Build.VERSION.SDK_INT < 31 && available(legacyProvisioningRequest()),
             )
         } catch (e: RuntimeException) { result.copy(lockState = -1, problem = "Проверка Android недоступна: ${e.javaClass.simpleName}. Полномочия не подтверждены.") }
@@ -260,7 +270,7 @@ class AndroidDeviceAccess(private val activity: Activity) : DeviceAccess {
     override fun removeSelf() { dpm.setLockTaskPackages(admin, dpm.getLockTaskPackages(admin).filter { it != pkg }.toTypedArray()) }
     override fun startLock() {
         check(dpm?.isLockTaskPermitted(pkg) == true) { "DPC не разрешил Lock Task. Закрепление экрана не запускается." }
-        check(context.getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == false) { "Сначала разблокируйте Android. Kiosk поверх экрана блокировки не запускается; повторите настройку после разблокировки." }
+        check(context.getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == false) { "Сначала разблокируйте Android. Kiosk поверх экрана блокировки не запускается; повторный запуск возможен после разблокировки." }
         activity.startLockTask()
     }
     override fun stopLock() = activity.stopLockTask()

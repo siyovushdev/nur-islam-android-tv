@@ -2,6 +2,9 @@ package dev.nurislam.tv
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
@@ -23,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.delay
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.core.view.WindowCompat
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
@@ -51,7 +55,11 @@ class MainActivity : ComponentActivity() {
     private var setupBusy by mutableStateOf(false)
     private var setupRevision by mutableIntStateOf(0)
     private var setupJob: Job? = null
-    private var restoredKiosk = false
+    private val unlockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_USER_PRESENT && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) retryKioskRestore()
+        }
+    }
     private val homePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         refreshDevice() // RESULT_OK is not evidence that HOME was actually assigned.
         setupMessage = if (deviceStatus.home) "Нур Ислам назначен HOME. Проверьте перезапуск на вашем ТВ." else "HOME пока не назначен. Запрос отклонён или прошивка не разрешила изменение. Доступны настройки HOME и обычный режим."
@@ -87,16 +95,26 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         if (::deviceSetup.isInitialized) {
             refreshDevice()
-            if (!restoredKiosk) {
-                restoredKiosk = true
-                setupOperation {
-                    deviceSetup.recoverInterruptedTrial()
-                    deviceSetup.restoreKiosk() // only explicit, successfully committed kiosk consent
-                }
+            retryKioskRestore()
+        }
+    }
+    private fun retryKioskRestore() {
+        // One bounded attempt per resume/unlock event; never interfere with a live setup/trial.
+        if (setupBusy || deviceSetup.trialDeadline != null) return
+        setupOperation {
+            deviceSetup.recoverInterruptedTrial()
+            if (deviceSetup.preferences.kiosk) {
+                deviceSetup.restoreKiosk()
+                setupMessage = null
             }
         }
     }
+    override fun onStart() {
+        super.onStart()
+        ContextCompat.registerReceiver(this, unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT), ContextCompat.RECEIVER_NOT_EXPORTED)
+    }
     override fun onStop() {
+        unregisterReceiver(unlockReceiver)
         if (::deviceSetup.isInitialized && deviceSetup.trialDeadline != null) {
             setupJob?.cancel()
             try { deviceSetup.cancelTrial() }

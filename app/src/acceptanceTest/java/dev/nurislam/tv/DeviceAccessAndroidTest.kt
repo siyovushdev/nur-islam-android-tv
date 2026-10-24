@@ -95,4 +95,39 @@ class DeviceAccessAndroidTest {
         device.stopLock()
         assertEquals(android.app.ActivityManager.LOCK_TASK_MODE_NONE, device.status().lockState)
     }
+    @Test fun savedKioskSurvivesRealKeyguardAndRestoresAfterUnlock() = withDevice { activity, device ->
+        val dpm = activity.getSystemService(DevicePolicyManager::class.java)
+        shadowOf(dpm).setDeviceOwner(ComponentName(activity, MosqueDeviceAdmin::class.java))
+        device.allowSelf()
+        val prefs = SetupPreferences.from(activity)
+        prefs.kiosk(true)
+        val controller = DeviceSetupController(device, prefs)
+        val keyguard = activity.getSystemService(android.app.KeyguardManager::class.java)
+        shadowOf(keyguard).setKeyguardLocked(true)
+        kotlinx.coroutines.runBlocking {
+            try { controller.restoreKiosk(); fail("Keyguard must defer kiosk") } catch (_: IllegalStateException) {}
+            assertTrue(SetupPreferences.from(activity).kiosk)
+            assertEquals(android.app.ActivityManager.LOCK_TASK_MODE_NONE, device.status().lockState)
+            shadowOf(keyguard).setKeyguardLocked(false)
+            controller.restoreKiosk()
+            assertTrue(prefs.kiosk)
+            assertEquals(android.app.ActivityManager.LOCK_TASK_MODE_LOCKED, device.status().lockState)
+            controller.disableKiosk()
+        }
+    }
+    @Test fun revokedRealDpcPermissionDisablesSavedKioskWithoutPinning() = withDevice { activity, device ->
+        val dpm = activity.getSystemService(DevicePolicyManager::class.java)
+        val admin = ComponentName(activity, MosqueDeviceAdmin::class.java)
+        shadowOf(dpm).setDeviceOwner(admin)
+        device.allowSelf()
+        val prefs = SetupPreferences.from(activity)
+        prefs.kiosk(true)
+        dpm.setLockTaskPackages(admin, emptyArray())
+        kotlinx.coroutines.runBlocking {
+            try { DeviceSetupController(device, prefs).restoreKiosk(); fail("Revoked permission must refuse") } catch (_: IllegalStateException) {}
+        }
+        assertFalse(prefs.kiosk)
+        assertEquals(android.app.ActivityManager.LOCK_TASK_MODE_NONE, device.status().lockState)
+    }
+
 }
