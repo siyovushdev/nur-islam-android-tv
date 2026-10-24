@@ -1,6 +1,7 @@
 package dev.nurislam.tv.ui
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import dev.nurislam.tv.settings.*
@@ -9,6 +10,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.TextUnit
 
 object BoardColors {
     val Background = Color(0xFF063526)
@@ -63,6 +65,10 @@ fun NurIslamTheme(id: BoardThemeId = BoardThemeId.ELEGANT, content: @Composable 
         primary = colors.Gold, onPrimary = colors.Deep,
         surface = colors.Card, onSurface = colors.Text,
         background = colors.Background, onBackground = colors.Text,
-    ), content = content)
+    )) {
+        // Menu fonts scale with the window. A fixed bodyLarge line height (24sp)
+        // otherwise doubles their spacing on a 1080p TV at density 320.
+        CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.copy(lineHeight = TextUnit.Unspecified), content = content)
+    }
 }
 }
