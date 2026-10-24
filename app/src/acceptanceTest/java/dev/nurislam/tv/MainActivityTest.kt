@@ -22,6 +22,10 @@ import java.time.LocalDate
 @RunWith(AndroidJUnit4::class)
 class MainActivityTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    @org.junit.Before fun completeInitialSetup() {
+        // Existing board/settings scenarios begin after the separately tested first-run wizard.
+        compose.onNodeWithText("Пропустить и открыть табло").performClick()
+    }
     private val app get() = compose.activity.application as NurIslamApplication
     private fun key(key: Key, count: Int = 1) { compose.onRoot().performKeyInput { repeat(count) { pressKey(key) } } }
     private fun settings() {
