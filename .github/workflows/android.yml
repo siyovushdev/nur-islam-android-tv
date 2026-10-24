@@ -48,3 +48,32 @@ jobs:
           path: |
             app/build/reports/
             app/build/screenshots/
+  phone-install:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: nur-islam-phone-debug
+          path: phone-apk
+      - name: Enable KVM on the disposable CI runner
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install the published APK and check touch navigation
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          disable-animations: true
+          script: python3 scripts/check-phone-apk.py phone-apk/Nur-Islam-Phone-Debug.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phone-emulator-install
+          path: phone-emulator-results/
