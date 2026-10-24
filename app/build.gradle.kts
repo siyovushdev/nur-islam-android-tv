@@ -10,8 +10,8 @@ android {
         applicationId = "dev.nurislam.tv"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
@@ -21,6 +21,8 @@ android {
     buildFeatures { compose = true; buildConfig = true }
     sourceSets.getByName("androidTest").java.srcDir("src/sharedTest/java")
     sourceSets.getByName("testDebug").java.srcDir("src/sharedTest/java")
+    sourceSets.getByName("testDebug").java.srcDir("src/acceptanceTest/java")
+    sourceSets.getByName("testRelease").java.srcDir("src/acceptanceTest/java")
     testOptions {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
@@ -41,7 +43,10 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    implementation("com.google.code.gson:gson:2.11.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
     androidTestImplementation(platform("androidx.compose:compose-bom:2025.04.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
@@ -52,4 +57,8 @@ dependencies {
     add("testDebugImplementation", "androidx.compose.ui:ui-test-junit4")
     add("testDebugImplementation", "androidx.test.ext:junit:1.2.1")
     add("testDebugImplementation", "org.robolectric:robolectric:4.15.1")
+    add("testReleaseImplementation", platform("androidx.compose:compose-bom:2025.04.01"))
+    add("testReleaseImplementation", "androidx.compose.ui:ui-test-junit4")
+    add("testReleaseImplementation", "androidx.test.ext:junit:1.2.1")
+    add("testReleaseImplementation", "org.robolectric:robolectric:4.15.1")
 }

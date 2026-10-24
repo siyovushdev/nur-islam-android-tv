@@ -7,8 +7,8 @@ import java.time.ZoneId
 val MoscowZone: ZoneId = ZoneId.of("Europe/Moscow")
 
 /** Order matches the source calendar. FAJR_IN_MOSQUE has unconfirmed semantics. */
-enum class ScheduleEvent(val isPrayer: Boolean, val canBeNextPrayer: Boolean = isPrayer) {
-    SUHUR_END(false), FAJR_IN_MOSQUE(true, false), SUNRISE(false), ZAWAL(false),
+enum class ScheduleEvent(val isPrayer: Boolean) {
+    SUHUR_END(false), FAJR_IN_MOSQUE(true), SUNRISE(false), ZAWAL(false),
     DHUHR(true), ASR(true), MAGHRIB(true), ISHA(true),
 }
 

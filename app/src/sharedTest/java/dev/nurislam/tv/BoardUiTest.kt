@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.runner.RunWith
-import dev.nurislam.tv.data.DemoScheduleRepository
+import dev.nurislam.tv.data.DemoScheduleFixture
 import dev.nurislam.tv.domain.*
 import dev.nurislam.tv.model.ScheduleEvent
 import dev.nurislam.tv.ui.*
@@ -30,7 +30,7 @@ import java.time.LocalDate
 class BoardUiTest {
     @get:Rule val compose = createComposeRule()
     private val instant = Instant.parse("2026-10-23T11:20:00Z")
-    private val day = DemoScheduleRepository().day(LocalDate.of(2026, 10, 23))!!
+    private val day = DemoScheduleFixture().day(LocalDate.of(2026, 10, 23))!!
 
     private fun board(landscape: Boolean, unavailable: Boolean = false, state: State<Instant> = mutableStateOf(instant)) {
         compose.setContent {
@@ -64,7 +64,7 @@ class BoardUiTest {
     }
     @Test fun unavailableKeepsClockAndNeverShowsSampleTimes() {
         board(true, unavailable = true)
-        compose.onNodeWithText("Расписание недоступно").assertIsDisplayed()
+        compose.onNodeWithText("Расписание недоступно", substring = true).assertIsDisplayed()
         compose.onAllNodesWithText("15:15").assertCountEquals(0)
         compose.onNodeWithText("14:20").assertIsDisplayed()
         saveScreenshot("unavailable")
@@ -74,6 +74,22 @@ class BoardUiTest {
         board(true, state = state)
         compose.runOnIdle { state.value = instant.plusSeconds(65) }
         compose.onNodeWithText("00:53:55").assertIsDisplayed()
+    }
+    @Test fun unconfirmedFajrShowsUncertaintyInsteadOfDhuhrCountdown() {
+        val morning = Instant.parse("2026-10-23T03:00:00Z")
+        val clock = mutableStateOf(morning)
+        compose.setContent {
+            NurIslamTheme {
+                Box(Modifier.requiredSize(960.dp, 540.dp)) {
+                    PrayerBoardScreen(morning, clock, day, null, true, true,
+                        status = prayerStatus(morning, listOf(day), dev.nurislam.tv.data.FajrMeaning.UNCONFIRMED))
+                }
+            }
+        }
+        compose.onNodeWithText("Время Фаджра требует подтверждения", substring = true).assertIsDisplayed()
+        compose.onNodeWithTag("next-time").assertDoesNotExist()
+        compose.onNodeWithTag("countdown").assertDoesNotExist()
+        saveScreenshot("fajr-unconfirmed")
     }
     @Test fun clockwiseCornersRenderWithoutClipping() = corners(DisplayMode.PORTRAIT_ROTATE_CW)
     @Test fun counterclockwiseCornersRenderWithoutClipping() = corners(DisplayMode.PORTRAIT_ROTATE_CCW)

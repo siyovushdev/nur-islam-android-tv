@@ -61,6 +61,7 @@ fun ArchitecturalBackground() {
 
 @Composable
 fun Crescent(modifier: Modifier = Modifier) {
+    val colors = LocalBoardAppearance.current
     Canvas(modifier) {
         val r = size.height * .43f
         val c = Offset(size.width * .5f, size.height * .5f)
@@ -70,7 +71,7 @@ fun Crescent(modifier: Modifier = Modifier) {
             cubicTo(c.x - r * .65f, c.y + r, c.x - r * .8f, c.y - r * .55f, c.x + r * .3f, c.y - r)
             close()
         }
-        drawPath(crescent, Brush.linearGradient(listOf(BoardColors.Text, BoardColors.Gold)))
+        drawPath(crescent, Brush.linearGradient(listOf(colors.Text, colors.Gold)))
         val star = Path()
         val center = Offset(c.x + r * .55f, c.y - r * .25f)
         repeat(10) { i ->
@@ -80,7 +81,7 @@ fun Crescent(modifier: Modifier = Modifier) {
             val y = center.y + sin(a).toFloat() * radius
             if (i == 0) star.moveTo(x, y) else star.lineTo(x, y)
         }
-        star.close(); drawPath(star, BoardColors.Gold)
+        star.close(); drawPath(star, colors.Gold)
     }
 }
 

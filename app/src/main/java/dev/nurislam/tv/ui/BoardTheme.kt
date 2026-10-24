@@ -2,7 +2,8 @@ package dev.nurislam.tv.ui
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import dev.nurislam.tv.settings.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -28,11 +29,40 @@ object BoardSpacing {
 val BoardTextStyle = TextStyle(fontFamily = FontFamily.Serif, color = BoardColors.Text)
 val BoardDigitsStyle = BoardTextStyle.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum", letterSpacing = 0.sp)
 
+data class BoardAppearance(
+    val Background: Color = BoardColors.Background,
+    val Deep: Color = BoardColors.Deep,
+    val Card: Color = BoardColors.Card,
+    val Emerald: Color = BoardColors.Emerald,
+    val Highlight: Color = BoardColors.Highlight,
+    val Text: Color = BoardColors.Text,
+    val Secondary: Color = BoardColors.Secondary,
+    val Gold: Color = BoardColors.Gold,
+    val Outline: Color = BoardColors.Outline,
+    val ornate: Boolean = true,
+    val fontFamily: FontFamily = FontFamily.Serif,
+)
+val LocalBoardAppearance = staticCompositionLocalOf { BoardAppearance() }
+val LocalBoardSettings = staticCompositionLocalOf { AppSettings() }
+
+fun appearanceFor(id: BoardThemeId) = when (id) {
+    BoardThemeId.ELEGANT -> BoardAppearance()
+    BoardThemeId.CLASSIC -> BoardAppearance(
+        Background = Color(0xFF084F26), Deep = Color(0xFF06391F), Card = Color(0xFF082F1D),
+        Emerald = Color(0xFF0B512B), Highlight = Color(0xFFFFD76A), Text = Color.White,
+        Secondary = Color(0xFFDDE5D7), Gold = Color(0xFFFFD76A), Outline = Color(0xFFC6AA61),
+        ornate = false, fontFamily = FontFamily.SansSerif,
+    )
+}
+
 @Composable
-fun NurIslamTheme(content: @Composable () -> Unit) {
+fun NurIslamTheme(id: BoardThemeId = BoardThemeId.ELEGANT, content: @Composable () -> Unit) {
+    val colors = remember(id) { appearanceFor(id) }
+    CompositionLocalProvider(LocalBoardAppearance provides colors) {
     MaterialTheme(colorScheme = darkColorScheme(
-        primary = BoardColors.Gold, onPrimary = BoardColors.Deep,
-        surface = BoardColors.Card, onSurface = BoardColors.Text,
-        background = BoardColors.Background, onBackground = BoardColors.Text,
+        primary = colors.Gold, onPrimary = colors.Deep,
+        surface = colors.Card, onSurface = colors.Text,
+        background = colors.Background, onBackground = colors.Text,
     ), content = content)
+}
 }
