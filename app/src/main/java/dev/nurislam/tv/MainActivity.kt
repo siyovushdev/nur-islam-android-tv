@@ -160,6 +160,7 @@ class MainActivity : ComponentActivity() {
             val settings by vm.settings.collectAsStateWithLifecycle()
             val schedules by vm.schedules.collectAsStateWithLifecycle()
             val candidate by vm.candidate.collectAsStateWithLifecycle()
+            val appliedSchedule by vm.appliedSchedule.collectAsStateWithLifecycle()
             val busy by vm.busy.collectAsStateWithLifecycle()
             val message by vm.message.collectAsStateWithLifecycle()
             var admin by remember { mutableStateOf(false) }
@@ -213,12 +214,12 @@ class MainActivity : ComponentActivity() {
                         val resolved = resolveDisplayMode(mode, constraints.maxWidth, constraints.maxHeight)
                         val board: @Composable () -> Unit = {
                             PrayerBoardScreen(minute, now, day, next, resolved == DisplayMode.LANDSCAPE, false, status = status,
-                                notice = if (setupMessage != null && !setupOpen) setupMessage else if (schedules.problem != null) stringResource(R.string.storage_notice) else if (showEntryHint && !BuildConfig.PHONE_PREVIEW) stringResource(R.string.settings_hint) else null)
+                                notice = if (setupMessage != null && !setupOpen) setupMessage else if (schedules.problem != null) stringResource(R.string.storage_notice) else if (active != null && isTestScheduleSource(active.metadata.source)) "Тестовый источник · Не официальное расписание" else if (showEntryHint && !BuildConfig.PHONE_PREVIEW) stringResource(R.string.settings_hint) else null)
                         }
                         val overlays: @Composable () -> Unit = {
                             if (admin && !setupOpen) AdminPanel(settings, schedules, candidate, busy, message, BuildConfig.VERSION_NAME,
                                 getExternalFilesDir(null)?.absolutePath ?: "Папка недоступна",
-                                focusToken = orientation, touchMode = BuildConfig.PHONE_PREVIEW,
+                                focusToken = orientation, touchMode = BuildConfig.PHONE_PREVIEW, appliedSchedule = appliedSchedule,
                                 onSettings = { change -> vm.settings(change) },
                                 onOrientation = { orientation = OrientationPreview(it, SystemClock.elapsedRealtime() + 15_000) },
                                 onPickFile = {

@@ -131,14 +131,14 @@ class PhoneActivityTest {
     @Test fun phoneSafImportPreviewApplyAndRollbackUpdateVisibleSchedule() {
         val uri = android.net.Uri.parse("content://test.documents/phone-calendar.json")
         val year = Instant.now().atZone(MoscowZone).year
-        shadowOf(app.contentResolver).registerInputStream(uri, ScheduleFixtures.json(year, "phone-one", meaning = "PRAYER_START").toString().byteInputStream())
+        shadowOf(app.contentResolver).registerInputStream(uri, ScheduleFixtures.json(year, "phone-one", meaning = "PRAYER_START").apply { addProperty("source", "Календарь мечети, протокол 42") }.toString().byteInputStream())
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java]
         openSettings(); tap("Расписание")
         compose.runOnIdle { vm.import(uri) }; waitIo()
-        tap("Подтверждаю: источник утверждён мечетью")
-        tap("Применить расписание")
+        compose.onNodeWithTag("import-confirmation").performClick()
+        compose.onNodeWithTag("import-apply").performClick(); waitIo()
         assertEquals("phone-one", app.schedules.state.value.current!!.metadata.revision)
-        compose.onNodeWithTag("phone-settings").performClick()
+        compose.onNodeWithText("Вернуться к табло").performClick()
         compose.onNodeWithTag("row-ASR").assert(hasAnyDescendant(hasText("15:15")))
         runBlocking { app.schedules.apply(ScheduleFixtures.schedule(year, "phone-two", asr = "16:00")) }
         compose.onNodeWithTag("row-ASR").assert(hasAnyDescendant(hasText("16:00")))
@@ -146,4 +146,17 @@ class PhoneActivityTest {
         compose.onNodeWithTag("phone-settings").performClick()
         compose.onNodeWithTag("row-ASR").assert(hasAnyDescendant(hasText("15:15")))
     }
+    @Test fun cancellingPhonePreviewLeavesRepositoryUntouched() {
+        val uri = android.net.Uri.parse("content://test.documents/cancel-calendar.json")
+        shadowOf(app.contentResolver).registerInputStream(uri, ScheduleFixtures.json().toString().byteInputStream())
+        val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java]
+        openSettings(); tap("Расписание")
+        compose.runOnIdle { vm.import(uri) }; waitIo()
+        compose.onNodeWithTag("import-preview").assertIsDisplayed()
+        compose.onNodeWithTag("import-cancel").performClick()
+        assertNull(vm.candidate.value)
+        assertNull(app.schedules.state.value.current)
+        compose.onNodeWithText("Импорт JSON — выбрать файл").assertIsDisplayed()
+    }
+
 }

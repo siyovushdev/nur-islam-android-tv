@@ -1,5 +1,8 @@
 """Install/smoke-test the distributed phone APK on an explicitly selected emulator only."""
 import argparse
+import datetime
+import json
+from zoneinfo import ZoneInfo
 from pathlib import Path
 import re
 import subprocess
@@ -77,6 +80,47 @@ try:
     screen_with("Тема: CLASSIC")
     screen_with("Масштаб текста: 115%")
     screenshot("saved-settings")
-    (output / "result.txt").write_text("PASS: signed APK install, LAUNCHER, no HOME entry point, touch settings/theme/scale, cold process restart\n")
+    # Synthetic fixtures exist only in the disposable emulator, never inside the APK.
+    year = datetime.datetime.now(ZoneInfo("Europe/Moscow")).year
+    day = datetime.date(year, 1, 1)
+    days = []
+    fields = ["suhurEnd", "fajrInMosque", "sunrise", "zawal", "dhuhr", "asr", "maghrib", "isha"]
+    values = ["05:08", "05:30", "07:12", "11:40", "12:05", "15:15", "17:48", "19:02"]
+    while day.year == year:
+        days.append({"date": day.isoformat(), **dict(zip(fields, values))})
+        day += datetime.timedelta(days=1)
+    fixture = {"schemaVersion": 1, "locationId": "qa-fixture", "locationName": "CI TEST ONLY",
+               "year": year, "timezone": "Europe/Moscow", "fajrMeaning": "PRAYER_START", "days": days,
+               "revision": "qa-42", "approved": False, "source": "ТЕСТ: конвертация Excel, не официальный календарь"}
+    inbox = "/sdcard/Android/data/" + package + "/files/incoming-schedule.json"
+    def push_fixture():
+        path = output / "synthetic-fixture.json"
+        path.write_text(json.dumps(fixture, ensure_ascii=False))
+        run("push", str(path), inbox)
+    tap("Расписание")
+    push_fixture()
+    tap("Импорт из локальной папки")
+    screen_with("Проверка расписания")
+    assert screen_with("Применить расписание").get("enabled") == "false"
+    screenshot("import-test-source")
+    tap("Отменить")
+    # Exercise the eligible-source confirmation path with an explicitly fabricated CI fixture.
+    fixture.update(approved=True, source="Календарь мечети, протокол 42")
+    push_fixture()
+    tap("Импорт из локальной папки")
+    screen_with("Проверка расписания")
+    assert screen_with("Применить расписание").get("enabled") == "false"
+    screenshot("import-unconfirmed")
+    tap("Подтверждаю: источник утверждён мечетью")
+    assert screen_with("Подтверждаю: источник утверждён мечетью").get("checked") == "true"
+    assert screen_with("Применить расписание").get("enabled") == "true"
+    screenshot("import-confirmed")
+    tap("Применить расписание")
+    screen_with("Расписание применено")
+    screenshot("import-success")
+    tap("Вернуться к табло")
+    screen_with("15:15")
+    screenshot("import-board-test-fixture")
+    (output / "result.txt").write_text("PASS: signed APK install, LAUNCHER, no HOME entry point, touch settings/theme/scale, cold process restart; import test-source block/cancel/confirm/apply/result/board\n")
 finally:
     (output / "android-runtime.txt").write_text(run("logcat", "-d", "-t", "150", "-s", "AndroidRuntime"))

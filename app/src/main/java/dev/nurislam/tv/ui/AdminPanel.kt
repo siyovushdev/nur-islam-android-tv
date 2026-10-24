@@ -28,9 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.nurislam.tv.data.*
 import dev.nurislam.tv.domain.DisplayMode
-import dev.nurislam.tv.domain.formatTime
 import dev.nurislam.tv.model.MoscowZone
-import dev.nurislam.tv.model.ScheduleEvent
 import dev.nurislam.tv.settings.*
 import java.time.Instant
 import java.time.ZoneId
@@ -49,6 +47,7 @@ fun AdminPanel(
     inboxPath: String,
     focusToken: Any? = null,
     touchMode: Boolean = false,
+    appliedSchedule: ValidatedSchedule? = null,
     onSettings: ((AppSettings) -> AppSettings) -> Unit,
     onOrientation: (DisplayMode) -> Unit,
     onPickFile: () -> Unit,
@@ -65,7 +64,6 @@ fun AdminPanel(
 ) {
     var page by remember { mutableStateOf(if (touchMode) AdminPage.SETTINGS else AdminPage.ENTRY) }
     var selection by remember { mutableIntStateOf(0) }
-    var approval by remember(candidate) { mutableStateOf(false) }
     var edit by remember { mutableStateOf<String?>(null) }
     val focus = remember { FocusRequester() }
     val scroll = rememberLazyListState()
@@ -81,7 +79,10 @@ fun AdminPanel(
     }
     BackHandler { back() }
     LaunchedEffect(candidate) { if (candidate != null) navigate(AdminPage.PREVIEW) }
-    LaunchedEffect(page, message, edit, focusToken) { if (message != null) selection = 0; if (edit == null) focus.requestFocus() }
+    LaunchedEffect(page, message, edit, focusToken, candidate, appliedSchedule) {
+        if (message != null) selection = 0
+        if (edit == null && (candidate == null || message != null) && appliedSchedule == null) focus.requestFocus()
+    }
     LaunchedEffect(selection, page) { scroll.scrollToItem(selection.coerceAtLeast(0)) }
     if (edit != null) {
         RemoteLabelEditor(if (edit == "name") settings.mosqueName else settings.location,
@@ -90,6 +91,18 @@ fun AdminPanel(
                 onSettings { if (field == "name") it.copy(mosqueName = text) else it.copy(location = text) }
                 edit = null
             }, touchMode = touchMode)
+        return
+    }
+    if (appliedSchedule != null) {
+        ScheduleImportResult(appliedSchedule, touchMode, onBoard = onClose, onDismiss = {
+            onDismissMessage(); navigate(AdminPage.SCHEDULE)
+        })
+        return
+    }
+    if (candidate != null && message == null) {
+        ScheduleImportPreview(candidate, schedules, busy, touchMode, onApply = onApply, onCancel = {
+            onDismissCandidate(); navigate(AdminPage.SCHEDULE)
+        })
         return
     }
     val data = schedules.current
@@ -131,20 +144,6 @@ fun AdminPanel(
             AdminItem("Отменить") { navigate(AdminPage.SCHEDULE) },
             AdminItem("Подтвердить откат", schedules.previous?.let { "Вернуть ${it.metadata.year} / ${it.metadata.revision}. Текущая версия станет резервной." } ?: "Нет резервной версии", schedules.previous != null) { onRollback(); navigate(AdminPage.SCHEDULE) },
         )
-        page == AdminPage.PREVIEW && candidate != null -> {
-            val today = Instant.now().atZone(MoscowZone).toLocalDate()
-            val comparedDate = if (candidate.days.containsKey(today)) today else candidate.days.keys.minOrNull()!!
-            val incoming = candidate.day(comparedDate)!!
-            val current = schedules.scheduleFor(comparedDate)?.day(comparedDate)
-            listOf(
-                AdminItem("Отменить импорт") { onDismissCandidate(); navigate(AdminPage.SCHEDULE) },
-                AdminItem("Проверено: ${candidate.metadata.year}, ${candidate.days.size} дней", "${candidate.locationName} [${candidate.locationId}] · Europe/Moscow · ${candidate.metadata.source} · revision=${candidate.metadata.revision} · approved=${candidate.metadata.approved} · Фаджр=${candidate.fajrMeaning}", false) {},
-                AdminItem(if (approval) "✓ Источник утверждён мечетью" else "Подтверждаю: источник утверждён мечетью", "Файл не подтверждает подлинность сам по себе. Проверьте источник, особенно Иша и Фаджр.", candidate.metadata.approved) { approval = !approval },
-                AdminItem("Применить расписание", if (!candidate.metadata.approved) "Запрещено: approved=false. Нужен утверждённый файл." else if (candidate.metadata.year != today.year) "Год отличается от даты устройства. Предыдущий меньший год сохраняется до перехода; если подходящего года нет, табло не покажет времена." else "Текущая версия сохранится для отката", approval && candidate.metadata.approved) { onApply(); navigate(AdminPage.SCHEDULE) },
-            ) + ScheduleEvent.entries.map { event ->
-                AdminItem("$comparedDate / ${event.name}", "${current?.times?.get(event)?.let(::formatTime) ?: "—"} → ${formatTime(incoming.times.getValue(event))}", false) {}
-            }
-        }
         page == AdminPage.HOME -> listOf(
             AdminItem("Назад") { navigate(AdminPage.SETTINGS) },
             AdminItem("Мастер HOME / kiosk", "Проверка HOME, Device Owner, пробный Lock Task и восстановление Launcher.", onDeviceSetup != null) { onDeviceSetup?.invoke() },

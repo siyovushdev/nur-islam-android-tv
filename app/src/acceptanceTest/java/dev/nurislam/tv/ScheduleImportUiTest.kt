@@ -1,0 +1,95 @@
+package dev.nurislam.tv
+
+import androidx.activity.compose.setContent
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import dev.nurislam.tv.data.*
+import dev.nurislam.tv.settings.AppSettings
+import dev.nurislam.tv.ui.*
+import org.junit.Assert.*
+import org.junit.Rule
+import org.junit.rules.RuleChain
+import org.junit.rules.ExternalResource
+import androidx.test.core.app.ApplicationProvider
+import org.robolectric.Shadows.shadowOf
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+
+/** The same preview controls run in TV Debug and Release, without any Debug approval bypass. */
+@OptIn(ExperimentalTestApi::class)
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [26, 35])
+class ScheduleImportUiTest {
+    val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(object : ExternalResource() {
+        override fun before() {
+            // Android grants the app's own signature permission. Robolectric API 26 needs it explicitly.
+            val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+            shadowOf(app).grantPermissions("${app.packageName}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
+        }
+    }).around(compose)
+    private val pending = mutableStateOf<ValidatedSchedule?>(null)
+    private val applied = mutableStateOf<ValidatedSchedule?>(null)
+    private var appliedCount = 0
+    private var cancelCount = 0
+    private var closed by mutableStateOf(false)
+    private fun value(approved: Boolean = true, revision: String = "first") = ScheduleFixtures.json(approved = approved, revision = revision).apply {
+        addProperty("source", "Календарь мечети, протокол 42") // Fabricated test fixture, never runtime data.
+    }.let { ScheduleJson.parse(it.toString().toByteArray()) }
+    private fun show(approved: Boolean = true) {
+        pending.value = value(approved)
+        compose.activity.setContent {
+            NurIslamTheme {
+                if (closed) Text("Табло открыто")
+                else AdminPanel(AppSettings(), ScheduleState(), pending.value, false, null, "TEST", "", appliedSchedule = applied.value,
+                    onSettings = {}, onOrientation = {}, onPickFile = {}, onInbox = {}, onApply = {
+                        appliedCount++; applied.value = pending.value; pending.value = null
+                    }, onRollback = {}, onDismissCandidate = { cancelCount++; pending.value = null },
+                    onDismissMessage = { applied.value = null }, onHomeSettings = {}, onOtherLauncher = {}, onClose = { closed = true })
+            }
+        }
+    }
+    private fun key(key: Key) = compose.onRoot().performKeyInput { pressKey(key) }
+    @Test fun dpadVisitsActionsSkipsInformationAndReturnsToBoardAfterSuccess() {
+        show()
+        compose.onNodeWithTag("import-cancel").assertIsSelected()
+        compose.onNodeWithTag("import-apply").assertIsNotEnabled()
+        key(Key.DirectionDown)
+        compose.onNodeWithTag("import-confirmation").assertIsSelected().assertIsOff()
+        key(Key.Enter)
+        compose.onNodeWithTag("import-confirmation").assertIsOn()
+        key(Key.DirectionDown)
+        compose.onNodeWithTag("import-apply").assertIsSelected().assertIsEnabled()
+        key(Key.Enter)
+        assertEquals(1, appliedCount)
+        compose.onNodeWithTag("import-result").assertIsDisplayed()
+        key(Key.Enter)
+        compose.onNodeWithText("Табло открыто").assertIsDisplayed()
+    }
+    @Test fun dpadCancelReturnsToScheduleWithoutApplying() {
+        show(); key(Key.Enter)
+        assertEquals(1, cancelCount)
+        assertEquals(0, appliedCount)
+        compose.onNodeWithText("Импорт JSON — выбрать файл").assertIsDisplayed()
+    }
+    @Test fun replacingCandidateClearsConfirmation() {
+        show()
+        key(Key.DirectionDown); key(Key.Enter)
+        compose.onNodeWithTag("import-confirmation").assertIsOn()
+        compose.runOnIdle { pending.value = value(revision = "replacement") }
+        compose.onNodeWithTag("import-confirmation").assertIsOff()
+        compose.onNodeWithTag("import-apply").assertIsNotEnabled()
+    }
+    @Test fun unapprovedCannotBeConfirmedOrAppliedInReleaseEither() {
+        show(approved = false)
+        key(Key.DirectionDown); key(Key.Enter); key(Key.DirectionDown); key(Key.Enter)
+        compose.onNodeWithTag("import-confirmation").assertIsNotEnabled().assertIsOff()
+        compose.onNodeWithTag("import-apply").assertIsNotEnabled()
+        assertEquals(0, appliedCount)
+    }
+}
