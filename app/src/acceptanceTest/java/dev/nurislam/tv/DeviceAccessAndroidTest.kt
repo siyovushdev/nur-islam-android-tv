@@ -79,4 +79,20 @@ class DeviceAccessAndroidTest {
         val provisioning = activity.packageManager.getActivityInfo(ComponentName(activity, ProvisioningActivity::class.java), 0)
         assertEquals("android.permission.BIND_DEVICE_ADMIN", provisioning.permission)
     }
+    @Test fun keyguardMustBeUnlockedBeforeStartingRealActivityLockTask() = withDevice { activity, device ->
+        try { device.startLock(); fail("Adapter must also refuse missing DPC permission") } catch (_: IllegalStateException) {}
+        val dpm = activity.getSystemService(DevicePolicyManager::class.java)
+        shadowOf(dpm).setDeviceOwner(ComponentName(activity, MosqueDeviceAdmin::class.java))
+        device.allowSelf()
+        val keyguard = activity.getSystemService(android.app.KeyguardManager::class.java)
+        shadowOf(keyguard).setKeyguardLocked(true)
+        try { device.startLock(); fail("Must refuse to lock over keyguard") } catch (_: IllegalStateException) {}
+        assertEquals(android.app.ActivityManager.LOCK_TASK_MODE_NONE, device.status().lockState)
+        shadowOf(keyguard).setKeyguardLocked(false)
+        // The authorized adapter call reaches the Activity framework shadow only after unlocking.
+        device.startLock()
+        assertEquals(android.app.ActivityManager.LOCK_TASK_MODE_LOCKED, device.status().lockState)
+        device.stopLock()
+        assertEquals(android.app.ActivityManager.LOCK_TASK_MODE_NONE, device.status().lockState)
+    }
 }

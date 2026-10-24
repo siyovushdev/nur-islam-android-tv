@@ -186,6 +186,21 @@ class DeviceSetupControllerTest {
         fails { broken.disableKiosk() }
         assertEquals(LOCK_TASK_MODE_NONE, device.facts.lockState)
     }
+    @Test fun unavailableDiagnosticsCannotProveLockEntryOrExit() = runTest {
+        device.facts = device.facts.copy(lockPermitted = true, problem = "Service unavailable")
+        fails { controller.startTrial() }
+        assertEquals(0, device.starts)
+        device.facts = device.facts.copy(problem = null)
+        controller.startTrial()
+        device.facts = device.facts.copy(problem = "Service unavailable")
+        fails { controller.finishTrialByRemote() }
+        fails { controller.cancelTrial() }
+        assertFalse(controller.exitTested)
+        assertTrue(prefs.trialPending)
+        device.facts = device.facts.copy(problem = null)
+        controller.cancelTrial()
+        assertFalse(prefs.trialPending)
+    }
     @Test fun malformedPreferencesDoNotGrantOrRestoreKiosk() = runTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val raw = context.getSharedPreferences("controller-test", Context.MODE_PRIVATE)

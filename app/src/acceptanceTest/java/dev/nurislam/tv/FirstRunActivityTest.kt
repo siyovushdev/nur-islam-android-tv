@@ -112,6 +112,17 @@ class FirstRunActivityTest {
         assertFalse(SetupPreferences.from(compose.activity).kiosk)
         compose.onNodeWithText("Далее: итоговая проверка").assertIsDisplayed()
     }
+    @Test fun homeTestCompletesSetupAndLaunchesTheRealHomeIntent() {
+        key(Key.Back) // summary
+        key(Key.DirectionDown); key(Key.Enter)
+        assertTrue(SetupPreferences.from(compose.activity).completed)
+        compose.onNodeWithTag("device-setup").assertDoesNotExist()
+        val intent = shadowOf(compose.activity).nextStartedActivity
+        assertEquals(Intent.ACTION_MAIN, intent.action)
+        assertTrue(intent.hasCategory(Intent.CATEGORY_HOME))
+        compose.activityRule.scenario.recreate()
+        compose.onNodeWithTag("device-setup").assertDoesNotExist()
+    }
     @Test fun homeReturnDoesNotBypassUnfinishedWizardAndBackIsSafe() {
         compose.runOnIdle { androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().callActivityOnNewIntent(compose.activity, Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)) }
         compose.onNodeWithTag("device-setup").assertIsDisplayed()

@@ -2,6 +2,7 @@ package dev.nurislam.tv.setup
 
 import android.app.Activity
 import android.app.ActivityManager
+import android.app.KeyguardManager
 import android.app.admin.DevicePolicyManager
 import android.app.role.RoleManager
 import android.content.ComponentName
@@ -79,6 +80,7 @@ class DeviceSetupController(val access: DeviceAccess, val preferences: SetupPref
         starting = true
         try {
             val s = access.status()
+            check(s.problem == null) { "Полномочия Android не проверены: ${s.problem}" }
             if (!s.lockPermitted && s.deviceOwner) {
                 // Record before the policy call, so interrupted/failed calls can be cleaned up.
                 preferences.ownsAllowlistEntry(true)
@@ -97,7 +99,8 @@ class DeviceSetupController(val access: DeviceAccess, val preferences: SetupPref
 
     suspend fun finishTrialByRemote() {
         check(trialDeadline?.let { SystemClock.elapsedRealtime() < it } == true) { "Время пробы истекло" }
-        check(access.status().lockState == ActivityManager.LOCK_TASK_MODE_LOCKED) { "Настоящий Lock Task не подтверждён системой" }
+        val facts = access.status()
+        check(facts.problem == null && facts.lockState == ActivityManager.LOCK_TASK_MODE_LOCKED) { "Настоящий Lock Task не подтверждён системой" }
         stopVerified()
         preferences.trialPending(false)
         trialDeadline = null
@@ -138,12 +141,14 @@ class DeviceSetupController(val access: DeviceAccess, val preferences: SetupPref
     }
 
     private suspend fun startVerified() {
-        check(access.status().lockPermitted) { "Разрешение Lock Task отсутствует или отозвано" }
-        if (access.status().lockState == ActivityManager.LOCK_TASK_MODE_LOCKED) return
-        check(access.status().lockState == ActivityManager.LOCK_TASK_MODE_NONE) { "Закрепление экрана не является kiosk" }
+        val facts = access.status()
+        check(facts.problem == null && facts.lockPermitted) { "Разрешение Lock Task отсутствует, отозвано или не подтверждено" }
+        if (facts.lockState == ActivityManager.LOCK_TASK_MODE_LOCKED) return
+        check(facts.lockState == ActivityManager.LOCK_TASK_MODE_NONE) { "Закрепление экрана не является kiosk" }
         access.startLock()
         repeat(10) {
-            if (access.status().lockState == ActivityManager.LOCK_TASK_MODE_LOCKED) return
+            val state = access.status()
+            if (state.problem == null && state.lockState == ActivityManager.LOCK_TASK_MODE_LOCKED) return
             delay(100)
         }
         error("Android не подтвердил Lock Task; выполнен безопасный выход")
@@ -152,7 +157,8 @@ class DeviceSetupController(val access: DeviceAccess, val preferences: SetupPref
     private suspend fun stopVerified() {
         access.stopLock()
         repeat(10) {
-            if (access.status().lockState == ActivityManager.LOCK_TASK_MODE_NONE) return
+            val state = access.status()
+            if (state.problem == null && state.lockState == ActivityManager.LOCK_TASK_MODE_NONE) return
             delay(100)
         }
         error("Android не подтвердил выход. Обратитесь к администратору DPC; повторите отключение.")
@@ -163,7 +169,8 @@ class DeviceSetupController(val access: DeviceAccess, val preferences: SetupPref
         if (trialDeadline != null) {
             // Leave the deadline armed if stop throws: the next resume/timer retries.
             access.stopLock()
-            check(access.status().lockState == ActivityManager.LOCK_TASK_MODE_NONE) { "Выход ещё не подтверждён. Повторите отключение kiosk." }
+            val state = access.status()
+            check(state.problem == null && state.lockState == ActivityManager.LOCK_TASK_MODE_NONE) { "Выход ещё не подтверждён. Повторите отключение kiosk." }
             preferences.trialPending(false)
             trialDeadline = null
             exitTested = false
@@ -183,7 +190,8 @@ class DeviceSetupController(val access: DeviceAccess, val preferences: SetupPref
     }
 
     fun setManagedHome() {
-        check(access.status().deviceOwner) { "Требуется Device Owner нашего приложения" }
+        val facts = access.status()
+        check(facts.problem == null && facts.deviceOwner) { "Требуется подтверждённый Device Owner нашего приложения" }
         preferences.ownsHomePolicy(true)
         access.setManagedHome()
         check(access.status().home) { "Android пока не подтвердил HOME. Обновите диагностику." }
@@ -192,6 +200,7 @@ class DeviceSetupController(val access: DeviceAccess, val preferences: SetupPref
     suspend fun releaseHome() {
         disableKiosk()
         val facts = access.status()
+        check(facts.problem == null) { "HOME не освобождён: диагностика Android недоступна. Повторите проверку." }
         check(facts.otherHomes.isNotEmpty() || facts.homeSettingsAvailable) { "Другой Launcher и настройки HOME не обнаружены. Kiosk отключён; HOME пока сохранён. Включите штатный Launcher средствами производителя." }
         if (preferences.ownsHomePolicy) {
             check(access.status().deviceOwner) { "Политику HOME должен снять управляющий DPC" }
@@ -235,7 +244,7 @@ class AndroidDeviceAccess(private val activity: Activity) : DeviceAccess {
                 provisioningAllowed = dpm?.isProvisioningAllowed(DevicePolicyManager.ACTION_PROVISION_MANAGED_DEVICE) == true,
                 legacyProvisioningAvailable = Build.VERSION.SDK_INT < 31 && available(legacyProvisioningRequest()),
             )
-        } catch (e: RuntimeException) { result.copy(problem = "Проверка Android недоступна: ${e.javaClass.simpleName}. Полномочия не подтверждены.") }
+        } catch (e: RuntimeException) { result.copy(lockState = -1, problem = "Проверка Android недоступна: ${e.javaClass.simpleName}. Полномочия не подтверждены.") }
     }
     override fun homeRequest(): Intent {
         if (Build.VERSION.SDK_INT >= 29) {
@@ -249,7 +258,11 @@ class AndroidDeviceAccess(private val activity: Activity) : DeviceAccess {
         .putExtra(DevicePolicyManager.EXTRA_PROVISIONING_LEAVE_ALL_SYSTEM_APPS_ENABLED, true)
     override fun allowSelf() { dpm.setLockTaskPackages(admin, (dpm.getLockTaskPackages(admin).toList() + pkg).distinct().toTypedArray()) }
     override fun removeSelf() { dpm.setLockTaskPackages(admin, dpm.getLockTaskPackages(admin).filter { it != pkg }.toTypedArray()) }
-    override fun startLock() = activity.startLockTask()
+    override fun startLock() {
+        check(dpm?.isLockTaskPermitted(pkg) == true) { "DPC не разрешил Lock Task. Закрепление экрана не запускается." }
+        check(context.getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == false) { "Сначала разблокируйте Android. Kiosk поверх экрана блокировки не запускается; повторите настройку после разблокировки." }
+        activity.startLockTask()
+    }
     override fun stopLock() = activity.stopLockTask()
     override fun setManagedHome() {
         val filter = IntentFilter(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME); addCategory(Intent.CATEGORY_DEFAULT) }

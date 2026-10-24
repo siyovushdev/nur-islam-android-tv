@@ -75,7 +75,7 @@ fun DeviceSetupWizard(
         }
     }
     val locked = status.lockState == ActivityManager.LOCK_TASK_MODE_LOCKED
-    val facts = "HOME: ${if (status.home) "Нур Ислам" else "не назначен"} · Device Owner: ${if (status.deviceOwner) "да" else "нет"}\nLock Task: ${when (status.lockState) { ActivityManager.LOCK_TASK_MODE_LOCKED -> "активен"; ActivityManager.LOCK_TASK_MODE_PINNED -> "только закрепление, не kiosk"; else -> "выключен" }} · разрешение DPC: ${if (status.lockPermitted) "есть" else "нет"}"
+    val facts = status.problem ?: "HOME: ${if (status.home) "Нур Ислам" else "не назначен"} · Device Owner: ${if (status.deviceOwner) "да" else "нет"}\nLock Task: ${when (status.lockState) { ActivityManager.LOCK_TASK_MODE_LOCKED -> "активен"; ActivityManager.LOCK_TASK_MODE_PINNED -> "только закрепление, не kiosk"; ActivityManager.LOCK_TASK_MODE_NONE -> "выключен"; else -> "не проверен" }} · разрешение DPC: ${if (status.lockPermitted) "есть" else "нет"}"
     val items = when {
         trialDeadline != null -> listOf(
             SetupItem("Отменить пробу и выйти", message ?: "Автовыход через $seconds с. Настройка не сохранена. BACK также отменяет пробу.") { action(SetupAction.CANCEL_TRIAL) },
@@ -99,7 +99,7 @@ fun DeviceSetupWizard(
         )
         page == SetupPage.KIOSK -> listOf(
             SetupItem("Далее: итоговая проверка", "3 / 4 · $facts") { go(SetupPage.SUMMARY) },
-            SetupItem("Отключить kiosk", "Сначала отключается восстановление kiosk при запуске, затем Lock Task. Выход доступен с пульта всегда.", kioskSaved || locked || status.lockState == ActivityManager.LOCK_TASK_MODE_PINNED || status.deviceOwner) { action(SetupAction.DISABLE_KIOSK) },
+            SetupItem("Отключить kiosk", "Сначала отключается восстановление kiosk при запуске, затем Lock Task. Выход доступен с пульта всегда.") { action(SetupAction.DISABLE_KIOSK) },
             SetupItem("Проверить безопасный выход", "20 секунд. Сначала пробный Lock Task, затем ↓ + OK для выхода. Таймаут/BACK/уход в фон отменяют пробу.", !kioskSaved && !locked && (status.deviceOwner || status.lockPermitted)) { action(SetupAction.START_TRIAL) },
             SetupItem("Включить kiosk при запуске", "Доступно только после успешного выхода из пробы с пульта. Администратор: OK пять раз → настройки → HOME → kiosk → отключить.", exitTested && !kioskSaved) { go(SetupPage.CONFIRM_KIOSK) },
             SetupItem("Управляемая первоначальная настройка", if (status.deviceOwner) "Device Owner уже назначен системе." else "Device Owner нельзя получить кнопкой разрешения после обычной установки.") { go(SetupPage.PROVISIONING) },
@@ -115,7 +115,7 @@ fun DeviceSetupWizard(
         )
         page == SetupPage.SUMMARY -> listOf(
             SetupItem("Сохранить и открыть табло", "4 / 4 · $facts\nМастер не появится при каждом запуске. Расписание, тема и ориентация сохраняются отдельно.") { action(SetupAction.FINISH) },
-            SetupItem("Проверить возврат к табло через HOME", "Откроется настоящий HOME Android. Если открылся другой экран, назначение не завершено. При активном kiosk проверку делайте после отключения.", !locked) { action(SetupAction.TEST_HOME) },
+            SetupItem("Проверить возврат к табло через HOME", "Завершит мастер и откроет настоящий HOME Android. Если открылся другой экран, назначение HOME не завершено. При активном kiosk проверку делайте после отключения.", !locked) { action(SetupAction.TEST_HOME) },
             SetupItem("Восстановить штатный Launcher", "Отключить kiosk, снять созданную нами политику HOME и открыть системный выбор. Device Owner останется; сброса нет.") { go(SetupPage.CONFIRM_RESTORE) },
             SetupItem("Аппаратная проверка", "После установки проверьте HOME с пульта, 3 перезагрузки, отключение питания, сон/CEC и 72 часа работы. Автозапуск зависит от прошивки. Приложение не управляет питанием панели.", false) {},
             SetupItem("Начать проверку заново") { go(SetupPage.CHECK) },

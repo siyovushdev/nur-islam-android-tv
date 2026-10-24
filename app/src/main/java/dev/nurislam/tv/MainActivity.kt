@@ -235,7 +235,7 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                     SetupAction.FINISH -> { deviceSetup.preferences.completed(true); setupOpen = false; admin = false }
                                                     SetupAction.APP_SETTINGS -> { deviceSetup.preferences.completed(true); setupOpen = false; admin = true }
-                                                    SetupAction.TEST_HOME -> { setupOpen = false; admin = false; startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)) }
+                                                    SetupAction.TEST_HOME -> { deviceSetup.preferences.completed(true); setupOpen = false; admin = false; startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)) }
                                                 }
                                             }
                                         })
