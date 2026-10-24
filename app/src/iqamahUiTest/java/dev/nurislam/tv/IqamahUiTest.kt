@@ -66,6 +66,15 @@ class IqamahUiTest {
             file.parentFile!!.mkdirs(); file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
     }
+    private fun noTextOverflow() {
+        val action = androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult
+        val nodes = compose.onAllNodes(SemanticsMatcher.keyIsDefined(action))
+        repeat(nodes.fetchSemanticsNodes().size) { index ->
+            val results = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+            nodes[index].performSemanticsAction(action) { it(results) }
+            results.forEach { assertFalse("Clipped text: ${it.layoutInput.text}", it.hasVisualOverflow) }
+        }
+    }
     @Test fun touchFullFixedRuleSourceConfirmationSaveAndReturn() {
         show()
         tap("Функция икамата")
@@ -110,6 +119,7 @@ class IqamahUiTest {
     }
     @Test fun dpadEntersIntervalAndConfirmsBaseWithoutKeyboard() {
         show(touch = false)
+        key(Key.Enter) // Enable explicitly; no default intervals.
         // Main: five global settings, then Fajr, Dhuhr, Asr.
         key(Key.DirectionDown, 7); key(Key.Enter)
         key(Key.DirectionDown, 2); key(Key.Enter); key(Key.Enter) // OFFSET, no invented value.
@@ -128,6 +138,27 @@ class IqamahUiTest {
         assertEquals(12, saved!!.rules.single().value)
         assertEquals(calendarFingerprint(calendar.json), saved!!.rules.single().baseCalendar)
         image("dpad-saved")
+        // Use the rules just entered, not a hand-built status, through every board transition.
+        val entered = saved!!
+        val day = entered.rules.single().from
+        val start = day.atTime(15, 15).atZone(MoscowZone).toInstant()
+        val clock = mutableStateOf(start.minusSeconds(1))
+        compose.activity.setContent { NurIslamTheme {
+            val status = prayerStatus(clock.value, schedules)
+            PrayerBoardScreen(clock.value, clock, calendar.day(day), (status as? PrayerStatus.Upcoming)?.prayer,
+                false, false, status = status, iqamah = iqamahStatus(clock.value, entered, schedules, allowDemo = true))
+        } }
+        compose.onNodeWithText("До икамата · ТЕСТ").assertDoesNotExist()
+        compose.runOnIdle { clock.value = start }
+        compose.onNodeWithText("До икамата · ТЕСТ").assertIsDisplayed()
+        compose.onNodeWithTag("countdown").assert(hasAnyDescendant(hasText("00:12:00")))
+        compose.runOnIdle { clock.value = start.plusSeconds(719) }
+        compose.onNodeWithTag("countdown").assert(hasAnyDescendant(hasText("00:00:01")))
+        compose.runOnIdle { clock.value = start.plusSeconds(720) }
+        compose.onNodeWithTag("iqamah-arrival").assertIsDisplayed()
+        compose.runOnIdle { clock.value = start.plusSeconds(780) }
+        compose.onNodeWithTag("iqamah-arrival").assertDoesNotExist()
+        compose.onNodeWithText("До икамата · ТЕСТ").assertDoesNotExist()
     }
     @Test fun editingAndDeletingExceptionKeepsSeasonalRule() {
         val regular = IqamahRule(IqamahPrayer.ASR, date, mode = IqamahMode.FIXED, value = 900)
@@ -215,7 +246,16 @@ class IqamahUiTest {
             compose.onNodeWithTag("iqamah-time").assertIsDisplayed().assert(hasAnyDescendant(hasText("15:27")))
             compose.onNodeWithTag("countdown").assertIsDisplayed().assert(hasAnyDescendant(hasText("00:01:10")))
             compose.onNodeWithTag("row-ISHA").assertIsDisplayed()
+            noTextOverflow()
             if (scale == 1f) image("${theme.name.lowercase()}-${mode.name.lowercase()}-waiting")
+            val event = (status.value as IqamahStatus.Waiting).event
+            compose.runOnIdle { status.value = IqamahStatus.Now(event, target.plusSeconds(60), false) }
+            compose.onNodeWithTag("iqamah-arrival").assertIsDisplayed()
+            noTextOverflow()
+            compose.runOnIdle { status.value = IqamahStatus.Now(event, target.plusSeconds(300), true) }
+            compose.onNodeWithTag("iqamah-dim").assertIsDisplayed()
+            noTextOverflow()
+            compose.runOnIdle { status.value = IqamahStatus.Waiting(event) }
         }
         val event = (status.value as IqamahStatus.Waiting).event
         compose.runOnIdle { clock.value = target; status.value = IqamahStatus.Now(event, target.plusSeconds(60), false) }

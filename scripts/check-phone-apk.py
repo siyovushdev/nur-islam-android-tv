@@ -179,6 +179,10 @@ try:
     run("shell", "am", "force-stop", package)
     run("shell", "am", "start", "-W", "-n", component)
     screen_with("ТЕСТОВОЕ РАСПИСАНИЕ · ТЕСТОВЫЙ ИКАМАТ")
+    restored_xml = (output / "screen.xml").read_text()
+    assert "До икамата" not in restored_xml, "Unknown start produced a false waiting countdown"
+    assert "начало не подтверждено" in restored_xml.lower()
+    assert target.strftime("%H:%M") in restored_xml, "Entered iqamah time was changed"
     screenshot("iqamah-restored")
     remaining = target_seconds - int(run("shell", "date", "+%s").strip())
     assert remaining > 0, "Fixture time elapsed before restart checks; timing budget needs adjustment"
