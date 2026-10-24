@@ -123,6 +123,7 @@ try:
     tap("Подтверждаю: источник утверждён мечетью")
     assert screen_with("Подтверждаю: источник утверждён мечетью", control=True).get("checked") == "true"
     assert screen_with("Применить расписание", control=True).get("enabled") == "true"
+    assert screen_with("Применить расписание", control=True).get("checkable") == "false"
     screenshot("import-confirmed")
     tap("Применить расписание")
     screen_with("Расписание применено")

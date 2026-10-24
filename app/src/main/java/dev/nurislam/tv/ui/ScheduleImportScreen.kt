@@ -17,7 +17,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -29,6 +29,10 @@ import dev.nurislam.tv.model.MoscowZone
 import dev.nurislam.tv.model.ScheduleEvent
 import kotlinx.coroutines.launch
 import java.time.Instant
+
+// Visual D-pad highlight is not selection/check state. Selected would override
+// ToggleableState in Android accessibility and make ordinary buttons checkable.
+internal val ImportActionHighlighted = SemanticsPropertyKey<Boolean>("ImportActionHighlighted")
 
 /** A warning based on explicit source labels, never evidence that other sources are official. */
 private val TestSourceLabel = Regex(
@@ -85,7 +89,7 @@ fun ScheduleImportPreview(
         val s = if (touchMode) .5f else minOf(maxWidth.value / 1080f, maxHeight.value / 1080f)
         val colors = LocalBoardAppearance.current
         val shape = RoundedCornerShape(8.dp)
-        fun actionModifier(index: Int, tag: String) = Modifier.semantics { selected = selection == index }.testTag(tag)
+        fun actionModifier(index: Int, tag: String) = Modifier.semantics(mergeDescendants = true) { this[ImportActionHighlighted] = selection == index }.testTag(tag)
             .border(if (selection == index) 2.dp else 0.dp, if (selection == index) colors.Gold else colors.Deep, shape)
         Column(Modifier.fillMaxSize().padding(if (touchMode) 12.dp else (32 * s).dp)) {
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).testTag("import-information")) {
@@ -192,7 +196,7 @@ fun ScheduleImportResult(schedule: ValidatedSchedule, touchMode: Boolean, onBoar
             }
             listOf("Вернуться к табло", "К расписанию").forEachIndexed { index, label ->
                 val modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).heightIn(min = 48.dp)
-                    .semantics { selected = selection == index }.border(if (selection == index) 2.dp else 0.dp, colors.Gold, RoundedCornerShape(8.dp))
+                    .semantics(mergeDescendants = true) { this[ImportActionHighlighted] = selection == index }.border(if (selection == index) 2.dp else 0.dp, colors.Gold, RoundedCornerShape(8.dp))
                 if (index == 0) Button(onClick = onBoard, modifier = modifier,
                     colors = ButtonDefaults.buttonColors(containerColor = colors.Gold, contentColor = colors.Deep)) { Text(label, fontSize = (28 * s).sp) }
                 else OutlinedButton(onClick = onDismiss, modifier = modifier,

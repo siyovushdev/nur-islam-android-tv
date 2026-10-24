@@ -57,14 +57,16 @@ class ScheduleImportUiTest {
     private fun key(key: Key) = compose.onRoot().performKeyInput { pressKey(key) }
     @Test fun dpadVisitsActionsSkipsInformationAndReturnsToBoardAfterSuccess() {
         show()
-        compose.onNodeWithTag("import-cancel").assertIsSelected()
+        compose.onNodeWithTag("import-cancel").assert(SemanticsMatcher.expectValue(ImportActionHighlighted, true))
         compose.onNodeWithTag("import-apply").assertIsNotEnabled()
         key(Key.DirectionDown)
-        compose.onNodeWithTag("import-confirmation").assertIsSelected().assertIsOff()
+        compose.onNodeWithTag("import-confirmation").assert(SemanticsMatcher.expectValue(ImportActionHighlighted, true)).assertIsOff()
         key(Key.Enter)
         compose.onNodeWithTag("import-confirmation").assertIsOn()
+        compose.onNodeWithTag("import-confirmation").assert(SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsProperties.Selected))
+        compose.onNodeWithTag("import-apply").assert(SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsProperties.Selected))
         key(Key.DirectionDown)
-        compose.onNodeWithTag("import-apply").assertIsSelected().assertIsEnabled()
+        compose.onNodeWithTag("import-apply").assert(SemanticsMatcher.expectValue(ImportActionHighlighted, true)).assertIsEnabled()
         key(Key.Enter)
         assertEquals(1, appliedCount)
         compose.onNodeWithTag("import-result").assertIsDisplayed()
@@ -81,6 +83,8 @@ class ScheduleImportUiTest {
         show()
         key(Key.DirectionDown); key(Key.Enter)
         compose.onNodeWithTag("import-confirmation").assertIsOn()
+        compose.onNodeWithTag("import-confirmation").assert(SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsProperties.Selected))
+        compose.onNodeWithTag("import-apply").assert(SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsProperties.Selected))
         compose.runOnIdle { pending.value = value(revision = "replacement") }
         compose.onNodeWithTag("import-confirmation").assertIsOff()
         compose.onNodeWithTag("import-apply").assertIsNotEnabled()

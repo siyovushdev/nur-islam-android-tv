@@ -60,8 +60,10 @@ class PhoneImportReviewTest {
         compose.onNodeWithTag("import-apply").assertIsNotEnabled().performClick()
         assertEquals(0, applications)
         image("import-after-unconfirmed")
-        for (event in ScheduleEvent.entries) {
+        val expectedTimes = listOf("05:08", "05:30", "07:12", "11:40", "12:05", "15:15", "17:48", "19:02")
+        ScheduleEvent.entries.forEachIndexed { index, event ->
             compose.onNodeWithTag("import-row-${event.name}").performScrollTo().assertHasNoClickAction()
+                .assert(hasAnyDescendant(hasText(expectedTimes[index])))
         }
         compose.onNodeWithTag("import-apply").assertIsDisplayed()
         compose.onNodeWithTag("import-cancel").assertIsDisplayed()
@@ -91,13 +93,15 @@ class PhoneImportReviewTest {
     }
     @Test fun dpadFocusConfirmationApplyAndCancel() {
         show()
-        compose.onNodeWithTag("import-cancel").assertIsSelected()
+        compose.onNodeWithTag("import-cancel").assert(SemanticsMatcher.expectValue(ImportActionHighlighted, true))
         key(Key.DirectionDown)
-        compose.onNodeWithTag("import-confirmation").assertIsSelected()
+        compose.onNodeWithTag("import-confirmation").assert(SemanticsMatcher.expectValue(ImportActionHighlighted, true))
         key(Key.Enter)
         compose.onNodeWithTag("import-confirmation").assertIsOn()
+        compose.onNodeWithTag("import-confirmation").assert(SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsProperties.Selected))
+        compose.onNodeWithTag("import-apply").assert(SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsProperties.Selected))
         key(Key.DirectionDown)
-        compose.onNodeWithTag("import-apply").assertIsSelected()
+        compose.onNodeWithTag("import-apply").assert(SemanticsMatcher.expectValue(ImportActionHighlighted, true))
         key(Key.Enter)
         assertEquals(1, applications)
         key(Key.DirectionDown); key(Key.Enter)
