@@ -8,6 +8,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -36,6 +37,9 @@ fun PrayerBoardScreen(
     status: PrayerStatus? = null,
     notice: String? = null,
 ) {
+    // TextAutoSize keeps measurement state. Recreate only the visual subtree when
+    // changing typeface/palette; keep the clock, calendar and settings outside it.
+    key(LocalBoardAppearance.current, LocalBoardSettings.current.textScale, landscape) {
     BoxWithConstraints(Modifier.fillMaxSize().testTag("prayer-board")) {
         val scale = if (landscape) minOf(maxWidth.value / 1920f, maxHeight.value / 1080f)
             else minOf(maxWidth.value / 1080f, maxHeight.value / 1920f)
@@ -64,6 +68,7 @@ fun PrayerBoardScreen(
                 Footer(demo, scale, Modifier.weight(.05f), notice)
             }
         }
+    }
     }
 }
 
