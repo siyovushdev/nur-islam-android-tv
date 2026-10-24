@@ -26,12 +26,14 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
     val candidate = mutableCandidate.asStateFlow()
     private val mutableMessage = MutableStateFlow<String?>(null)
     val message = mutableMessage.asStateFlow()
+    private val mutableAppliedSchedule = MutableStateFlow<ValidatedSchedule?>(null)
+    val appliedSchedule = mutableAppliedSchedule.asStateFlow()
     private val mutableBusy = MutableStateFlow(false)
     val busy = mutableBusy.asStateFlow()
 
     fun settings(change: (AppSettings) -> AppSettings, onSuccess: () -> Unit = {}) = operation { app.settings.update(change); onSuccess() }
     fun dismissCandidate() { mutableCandidate.value = null }
-    fun dismissMessage() { mutableMessage.value = null }
+    fun dismissMessage() { mutableMessage.value = null; mutableAppliedSchedule.value = null }
     fun message(text: String) { mutableMessage.value = text }
     private var operationGeneration = 0
     private var importJob: Job? = null
@@ -74,6 +76,7 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
         val parsed = requireNotNull(mutableCandidate.value)
         app.schedules.apply(parsed)
         mutableCandidate.value = null
+        mutableAppliedSchedule.value = parsed
         mutableMessage.value = "Расписание применено. Табло обновлено."
     }
     fun rollback() = operation {

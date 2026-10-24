@@ -76,8 +76,9 @@ class DisplayScreenshotsTest {
         val now = mutableStateOf(Instant.parse("2026-10-23T11:20:00Z"))
         val day = DemoScheduleFixture().day(LocalDate.of(2026, 10, 23))!!
         val theme = mutableStateOf(BoardThemeId.ELEGANT)
+        val textScale = mutableStateOf(1f)
         compose.setContent {
-            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale), LocalBoardSettings provides AppSettings(language = language, textScale = if (fontScale > 1f) 1.15f else 1f)) {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale), LocalBoardSettings provides AppSettings(language = language, textScale = textScale.value)) {
                 NurIslamTheme(theme.value) {
                     RotatedBoard(mode, Modifier.fillMaxSize()) {
                         PrayerBoardScreen(now.value, now, day, nextPrayer(now.value, listOf(day)), mode == DisplayMode.LANDSCAPE, true)
@@ -87,7 +88,8 @@ class DisplayScreenshotsTest {
         }
         val dir = File(requireNotNull(System.getProperty("nurIslam.screenshotDir"))).apply { mkdirs() }
         BoardThemeId.entries.forEach { id ->
-            compose.runOnIdle { theme.value = id }
+          listOf(.85f, 1f, 1.15f).forEach { scale ->
+            compose.runOnIdle { theme.value = id; textScale.value = scale }
             dev.nurislam.tv.model.ScheduleEvent.entries.forEach { event -> compose.onNodeWithTag("row-${event.name}").assertIsDisplayed() }
             val textNodes = compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.GetTextLayoutResult))
             repeat(textNodes.fetchSemanticsNodes().size) { index ->
@@ -95,10 +97,13 @@ class DisplayScreenshotsTest {
                 textNodes[index].performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
                 results.forEach { assertFalse("Text clipped: ${it.layoutInput.text}", it.hasVisualOverflow) }
             }
-            val image = compose.captureRenderedNode().asAndroidBitmap()
-            assertEquals(width, image.width)
-            assertEquals(height, image.height)
-            File(dir, "${id.name.lowercase()}-$name.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            if (scale == 1f) {
+                val image = compose.captureRenderedNode().asAndroidBitmap()
+                assertEquals(width, image.width)
+                assertEquals(height, image.height)
+                File(dir, "${id.name.lowercase()}-$name.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+          }
         }
     }
 }

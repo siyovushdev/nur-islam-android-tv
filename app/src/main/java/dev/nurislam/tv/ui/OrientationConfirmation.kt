@@ -18,7 +18,7 @@ import dev.nurislam.tv.settings.OrientationPreview
 import kotlinx.coroutines.delay
 
 @Composable
-fun OrientationConfirmation(preview: OrientationPreview, onConfirm: () -> Unit, onCancel: () -> Unit) {
+fun OrientationConfirmation(preview: OrientationPreview, onConfirm: () -> Unit, onCancel: () -> Unit, touchMode: Boolean = false) {
     var selection by remember(preview) { mutableIntStateOf(0) }
     var remaining by remember(preview) { mutableLongStateOf(preview.remainingSeconds(SystemClock.elapsedRealtime())) }
     val focus = remember { FocusRequester() }
@@ -42,15 +42,16 @@ fun OrientationConfirmation(preview: OrientationPreview, onConfirm: () -> Unit, 
                 true
             }
         }.focusRequester(focus).focusable(), contentAlignment = Alignment.Center) {
-        val s = minOf(maxWidth.value / 1080f, maxHeight.value / 1080f)
+        val s = if (touchMode) .5f else minOf(maxWidth.value / 1080f, maxHeight.value / 1080f)
         val colors = LocalBoardAppearance.current
-        Column(Modifier.fillMaxWidth(.85f), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.fillMaxWidth(.85f).then(if (touchMode) Modifier.verticalScroll(rememberScrollState()) else Modifier), horizontalAlignment = Alignment.CenterHorizontally) {
             Text("Сохранить ориентацию?", color = colors.Gold, fontSize = (42 * s).sp)
             Text("${preview.candidate}\nАвтоматический возврат через $remaining с", color = colors.Text, fontSize = (30 * s).sp, modifier = Modifier.padding((24 * s).dp))
             listOf("Вернуть прежний режим", "Подтвердить и сохранить").forEachIndexed { index, title ->
                 Text(title, color = if (selection == index) colors.Deep else colors.Text, fontSize = (32 * s).sp,
                     modifier = Modifier.fillMaxWidth().padding(vertical = (8 * s).dp).background(if (selection == index) colors.Gold else colors.Card)
-                        .clickable { if (index == 0) onCancel() else onConfirm() }.padding((24 * s).dp))
+                        .clickable { if (index == 0) onCancel() else onConfirm() }
+                        .then(if (touchMode) Modifier.heightIn(min = 48.dp) else Modifier).padding((24 * s).dp))
             }
         }
     }

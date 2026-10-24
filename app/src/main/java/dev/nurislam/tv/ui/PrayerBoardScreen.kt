@@ -47,7 +47,14 @@ fun PrayerBoardScreen(
         if (colors.ornate) ArchitecturalBackground()
         else Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(colors.Emerald, colors.Background, colors.Deep))))
         val date = minute.atZone(MoscowZone).toLocalDate()
+        // The layout insets are symmetric; the painted foreground is not. Measured
+        // at the design sizes after subtracting the unchanged architectural background:
+        // portrait Elegant 82/112px, Classic 82/179px; landscape 48/69px and 48/83px.
+        // Half the difference centers the normal board without changing any block size.
+        val opticalOffset = if (landscape) { if (colors.ornate) 10.5f else 17.5f }
+            else { if (colors.ornate) 15f else 48.5f }
         val safe = Modifier.fillMaxSize().padding(horizontal = maxWidth * BoardSpacing.SafeInset, vertical = maxHeight * .04f)
+            .offset(y = (opticalOffset * scale).dp).testTag("board-content")
         if (landscape) {
             Row(safe, horizontalArrangement = Arrangement.spacedBy((48 * scale).dp)) {
                 Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
