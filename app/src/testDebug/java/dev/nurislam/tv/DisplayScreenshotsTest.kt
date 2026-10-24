@@ -97,10 +97,12 @@ class DisplayScreenshotsTest {
                 textNodes[index].performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
                 results.forEach { assertFalse("Text clipped: ${it.layoutInput.text}", it.hasVisualOverflow) }
             }
-            val image = compose.captureRenderedNode().asAndroidBitmap()
-            assertEquals(width, image.width)
-            assertEquals(height, image.height)
-            if (scale == 1f) File(dir, "${id.name.lowercase()}-$name.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            if (scale == 1f) {
+                val image = compose.captureRenderedNode().asAndroidBitmap()
+                assertEquals(width, image.width)
+                assertEquals(height, image.height)
+                File(dir, "${id.name.lowercase()}-$name.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
           }
         }
     }

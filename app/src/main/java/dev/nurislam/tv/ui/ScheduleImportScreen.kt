@@ -32,7 +32,7 @@ import java.time.Instant
 
 /** A warning based on explicit source labels, never evidence that other sources are official. */
 private val TestSourceLabel = Regex(
-    """(?:^|[^\p{L}\p{N}])(?:test\p{L}*|synthetic\p{L}*|demo\p{L}*|тест\p{L}*|демо\p{L}*|макет\p{L}*)(?=$|[^\p{L}\p{N}])""",
+    """(?:^|[^\p{L}\p{N}])(?:test[\p{L}\p{N}]*|synthetic[\p{L}\p{N}]*|demo[\p{L}\p{N}]*|тест[\p{L}\p{N}]*|демо[\p{L}\p{N}]*|макет[\p{L}\p{N}]*)(?=$|[^\p{L}\p{N}])""",
     RegexOption.IGNORE_CASE,
 )
 fun isTestScheduleSource(source: String): Boolean = TestSourceLabel.containsMatchIn(source)

@@ -75,6 +75,7 @@ class PhoneImportReviewTest {
     @Test fun unapprovedAndExplicitExcelTestSourcesStayBlockedEvenWithApprovedTrue() {
         assertFalse(isTestScheduleSource("Latest calendar, протокол 42"))
         assertTrue(isTestScheduleSource("ТЕСТОВОЕ расписание из Excel"))
+        assertTrue(isTestScheduleSource("Excel TEST2026"))
         show(test = true)
         compose.onNodeWithTag("import-source-warning").assertTextContains("ТЕСТОВЫЙ", substring = true)
         compose.onNodeWithTag("import-confirmation").assertIsNotEnabled().assertIsOff()
