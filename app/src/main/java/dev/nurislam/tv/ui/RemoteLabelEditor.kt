@@ -6,6 +6,9 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.material3.Text
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,7 +20,11 @@ import androidx.compose.ui.unit.sp
 
 /** In-app keyboard remains correctly rotated on TVs where the system IME cannot rotate. */
 @Composable
-fun RemoteLabelEditor(initial: String, maxLength: Int, onSave: (String) -> Unit, onCancel: () -> Unit) {
+fun RemoteLabelEditor(initial: String, maxLength: Int, onSave: (String) -> Unit, onCancel: () -> Unit, touchMode: Boolean = false) {
+    if (touchMode) {
+        PhoneLabelEditor(initial, maxLength, onSave, onCancel)
+        return
+    }
     var value by remember { mutableStateOf(initial) }
     var latin by remember { mutableStateOf(false) }
     var lower by remember { mutableStateOf(false) }
@@ -74,5 +81,20 @@ fun RemoteLabelEditor(initial: String, maxLength: Int, onSave: (String) -> Unit,
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PhoneLabelEditor(initial: String, maxLength: Int, onSave: (String) -> Unit, onCancel: () -> Unit) {
+    var value by remember { mutableStateOf(initial) }
+    BackHandler(onBack = onCancel)
+    Column(Modifier.fillMaxSize().background(LocalBoardAppearance.current.Deep).imePadding()
+        .verticalScroll(rememberScrollState()).padding(16.dp).testTag("label-editor")) {
+        Text("Название / местоположение", color = LocalBoardAppearance.current.Gold, fontSize = 20.sp)
+        OutlinedTextField(value, onValueChange = { value = it.take(maxLength) },
+            label = { Text("Подпись на табло") }, modifier = Modifier.fillMaxWidth().testTag("label-value"),
+            supportingText = { Text("${value.length}/$maxLength") })
+        Button(onClick = { onSave(value.trim()) }, enabled = value.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Сохранить") }
+        TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Отменить") }
     }
 }

@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.NurIslam" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">serif</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">#05291F</item>
+        <item name="android:colorAccent">#E6C37B</item>
+        <item name="android:windowFullscreen">false</item>
+    </style>
+</resources>

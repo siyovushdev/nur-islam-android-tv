@@ -20,7 +20,19 @@ jobs:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew :app:assembleDebug :app:assembleRelease :app:test :app:lintDebug :app:lintRelease :app:assembleDebugAndroidTest
+      - run: ./gradlew :app:assembleDebug :app:assembleRelease :app:assemblePhoneDebug :app:test :app:lintDebug :app:lintRelease :app:lintPhoneDebug :app:assembleDebugAndroidTest
+      - name: Verify and prepare signed phone APK
+        run: |
+          mkdir -p app/build/distributions
+          cp app/build/outputs/apk/phoneDebug/app-phoneDebug.apk app/build/distributions/Nur-Islam-Phone-Debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs app/build/distributions/Nur-Islam-Phone-Debug.apk > app/build/distributions/signature.txt
+          cd app/build/distributions
+          sha256sum Nur-Islam-Phone-Debug.apk > Nur-Islam-Phone-Debug.apk.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nur-islam-phone-debug
+          path: app/build/distributions/
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: nur-islam-debug
