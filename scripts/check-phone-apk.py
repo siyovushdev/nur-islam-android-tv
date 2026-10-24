@@ -27,7 +27,7 @@ def run(*command):
                           capture_output=True, timeout=45).stdout
 
 
-def screen_with(label):
+def screen_with(label, control=False):
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         run("shell", "uiautomator", "dump", "/sdcard/nur-phone-smoke.xml")
@@ -36,13 +36,22 @@ def screen_with(label):
         root = ET.fromstring(xml)
         for node in root.iter("node"):
             if node.get("text") == label:
-                return node
+                if not control:
+                    return node
+                # Compose can export a TextView child with enabled=true inside a
+                # disabled Button/Checkbox. Inspect/tap the interactive ancestor.
+                parents = {child: parent for parent in root.iter() for child in parent}
+                while node is not None:
+                    if node.get("clickable") == "true" or node.get("checkable") == "true":
+                        return node
+                    node = parents.get(node)
+                raise AssertionError("Label has no control: " + label)
         time.sleep(1)
     raise AssertionError("Phone UI did not show: " + label)
 
 
 def tap(label):
-    node = screen_with(label)
+    node = screen_with(label, control=True)
     x1, y1, x2, y2 = map(int, re.findall(r"\d+", node.attrib["bounds"]))
     run("shell", "input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2))
 
@@ -101,7 +110,7 @@ try:
     push_fixture()
     tap("Импорт из локальной папки")
     screen_with("Проверка расписания")
-    assert screen_with("Применить расписание").get("enabled") == "false"
+    assert screen_with("Применить расписание", control=True).get("enabled") == "false"
     screenshot("import-test-source")
     tap("Отменить")
     # Exercise the eligible-source confirmation path with an explicitly fabricated CI fixture.
@@ -109,11 +118,11 @@ try:
     push_fixture()
     tap("Импорт из локальной папки")
     screen_with("Проверка расписания")
-    assert screen_with("Применить расписание").get("enabled") == "false"
+    assert screen_with("Применить расписание", control=True).get("enabled") == "false"
     screenshot("import-unconfirmed")
     tap("Подтверждаю: источник утверждён мечетью")
-    assert screen_with("Подтверждаю: источник утверждён мечетью").get("checked") == "true"
-    assert screen_with("Применить расписание").get("enabled") == "true"
+    assert screen_with("Подтверждаю: источник утверждён мечетью", control=True).get("checked") == "true"
+    assert screen_with("Применить расписание", control=True).get("enabled") == "true"
     screenshot("import-confirmed")
     tap("Применить расписание")
     screen_with("Расписание применено")
