@@ -144,7 +144,8 @@ fun ScheduleImportPreview(
                     !candidate.metadata.approved -> "Применение запрещено: approved=false. Нужен утверждённый файл."
                     busy -> "Применение расписания…"
                     !confirmed -> "Сначала подтвердите источник выше."
-                    else -> "Готово к применению. Текущая версия сохранится для отката."
+                    else -> if (schedules.current != null) "Готово к применению. Текущая версия сохранится для отката."
+                        else "Готово к применению. Первый календарь будет сохранён."
                 }, color = colors.Secondary, fontSize = (24 * s).sp, modifier = Modifier.padding(vertical = 4.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = ::cancel, enabled = !busy, shape = shape,
@@ -192,7 +193,7 @@ fun ScheduleImportResult(schedule: ValidatedSchedule, touchMode: Boolean, onBoar
                 Text("Расписание применено", color = colors.Gold, fontSize = (40 * s).sp, fontWeight = FontWeight.Bold)
                 Text("Табло обновлено. Сохранено ${schedule.days.size} дней на ${schedule.metadata.year} год.", color = colors.Text, fontSize = (30 * s).sp)
                 Text("Источник: ${schedule.metadata.source}", color = colors.Secondary, fontSize = (26 * s).sp, modifier = Modifier.padding(vertical = 12.dp))
-                Text("Предыдущая версия доступна для отката в разделе «Расписание».", color = colors.Secondary, fontSize = (24 * s).sp)
+                Text("Управление версиями и откат — в разделе «Расписание».", color = colors.Secondary, fontSize = (24 * s).sp)
             }
             listOf("Вернуться к табло", "К расписанию").forEachIndexed { index, label ->
                 val modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).heightIn(min = 48.dp)
