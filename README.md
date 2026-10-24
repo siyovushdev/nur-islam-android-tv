@@ -60,6 +60,8 @@ UI-проверки работают через Robolectric / native Skia, в т
 
 ## Документы
 
+- [Реальная функциональная проверка H728 и границы приёмки](docs/H728_HARDWARE_REPORT.md)
+
 - [Установка с пульта, HOME, kiosk и восстановление Launcher](docs/TV_SETUP.md)
 - [Требования мастера первого запуска HOME / Device Owner / Lock Task](docs/FIRST_RUN_AND_KIOSK.md) — [Issue #11](https://github.com/siyovushdev/nur-islam-android-tv/issues/11)
 - [Цель и критерии MVP](docs/CODEX_MVP_GOAL.md)
