@@ -38,11 +38,11 @@ class ScheduleImportUiTest {
     private var appliedCount = 0
     private var cancelCount = 0
     private var closed by mutableStateOf(false)
-    private fun value(approved: Boolean = true, revision: String = "first") = ScheduleFixtures.json(approved = approved, revision = revision).apply {
-        addProperty("source", "Календарь мечети, протокол 42") // Fabricated test fixture, never runtime data.
+    private fun value(approved: Boolean = true, revision: String = "first", source: String = "Календарь мечети, протокол 42") = ScheduleFixtures.json(approved = approved, revision = revision).apply {
+        addProperty("source", source) // Fabricated test fixture, never runtime data.
     }.let { ScheduleJson.parse(it.toString().toByteArray()) }
-    private fun show(approved: Boolean = true) {
-        pending.value = value(approved)
+    private fun show(approved: Boolean = true, source: String = "Календарь мечети, протокол 42") {
+        pending.value = value(approved, source = source)
         compose.activity.setContent {
             NurIslamTheme {
                 if (closed) Text("Табло открыто")
@@ -96,4 +96,15 @@ class ScheduleImportUiTest {
         compose.onNodeWithTag("import-apply").assertIsNotEnabled()
         assertEquals(0, appliedCount)
     }
+    @Test fun approvedPhoneTestSourceRemainsBlockedInTvBuilds() {
+        assertFalse(BuildConfig.PHONE_PREVIEW)
+        show(source = "ТЕСТ ДЛЯ ТЕЛЕФОНА")
+        compose.onNodeWithTag("import-source-warning").assertIsDisplayed()
+        compose.onNodeWithText("Понимаю: тестовое расписание не утверждено мечетью").assertDoesNotExist()
+        compose.onNodeWithTag("import-confirmation").assertIsNotEnabled().assertIsOff()
+        key(Key.DirectionDown); key(Key.Enter); key(Key.DirectionDown); key(Key.Enter)
+        compose.onNodeWithTag("import-apply").assertIsNotEnabled()
+        assertEquals(0, appliedCount)
+    }
+
 }

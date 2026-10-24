@@ -193,6 +193,7 @@ class MainActivity : ComponentActivity() {
                     val minute by remember(now) { derivedStateOf { now.value.truncatedTo(ChronoUnit.MINUTES) } }
                     val date = minute.atZone(MoscowZone).toLocalDate()
                     val active = remember(schedules, date) { schedules.scheduleFor(date) }
+                    val testSchedule = active != null && isTestScheduleSource(active.metadata.source)
                     val day = remember(active, date) { active?.day(date) }
                     val status = remember(schedules, minute) { prayerStatus(minute, schedules) }
                     val next = (status as? PrayerStatus.Upcoming)?.prayer
@@ -214,7 +215,7 @@ class MainActivity : ComponentActivity() {
                         val resolved = resolveDisplayMode(mode, constraints.maxWidth, constraints.maxHeight)
                         val board: @Composable () -> Unit = {
                             PrayerBoardScreen(minute, now, day, next, resolved == DisplayMode.LANDSCAPE, false, status = status,
-                                notice = if (setupMessage != null && !setupOpen) setupMessage else if (schedules.problem != null) stringResource(R.string.storage_notice) else if (active != null && isTestScheduleSource(active.metadata.source)) "Тестовый источник · Не официальное расписание" else if (showEntryHint && !BuildConfig.PHONE_PREVIEW) stringResource(R.string.settings_hint) else null)
+                                notice = if (setupMessage != null && !setupOpen) setupMessage else if (schedules.problem != null) stringResource(R.string.storage_notice) else if (testSchedule) "Тестовый источник · Не официальное расписание" else if (showEntryHint && !BuildConfig.PHONE_PREVIEW) stringResource(R.string.settings_hint) else null)
                         }
                         val overlays: @Composable () -> Unit = {
                             if (admin && !setupOpen) AdminPanel(settings, schedules, candidate, busy, message, BuildConfig.VERSION_NAME,
@@ -302,6 +303,12 @@ class MainActivity : ComponentActivity() {
                                     }, modifier = Modifier.testTag("phone-settings")) {
                                         Text(if (admin) "Табло" else "Настройки", color = LocalBoardAppearance.current.Gold, fontSize = 16.sp)
                                     }
+                                }
+                                if (testSchedule && !admin && !setupOpen) {
+                                    Text("ТЕСТОВОЕ РАСПИСАНИЕ", color = LocalBoardAppearance.current.Deep,
+                                        fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                        modifier = Modifier.fillMaxWidth().background(LocalBoardAppearance.current.Gold)
+                                            .padding(horizontal = 12.dp, vertical = 8.dp).testTag("test-schedule-banner"))
                                 }
                                 Box(Modifier.weight(1f).fillMaxWidth()) {
                                     PhoneBoardViewport(mode) {

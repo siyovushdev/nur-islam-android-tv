@@ -113,24 +113,30 @@ try:
     assert screen_with("Применить расписание", control=True).get("enabled") == "false"
     screenshot("import-test-source")
     tap("Отменить")
-    # Exercise the eligible-source confirmation path with an explicitly fabricated CI fixture.
-    fixture.update(approved=True, source="Календарь мечети, протокол 42")
+    # PhoneDebug alone permits a validated approved=true test source for demonstration.
+    fixture.update(approved=True, source="ТЕСТ ДЛЯ ТЕЛЕФОНА")
     push_fixture()
     tap("Импорт из локальной папки")
     screen_with("Проверка расписания")
     assert screen_with("Применить расписание", control=True).get("enabled") == "false"
     screenshot("import-unconfirmed")
-    tap("Подтверждаю: источник утверждён мечетью")
-    assert screen_with("Подтверждаю: источник утверждён мечетью", control=True).get("checked") == "true"
+    tap("Понимаю: тестовое расписание не утверждено мечетью")
+    assert screen_with("Понимаю: тестовое расписание не утверждено мечетью", control=True).get("checked") == "true"
     assert screen_with("Применить расписание", control=True).get("enabled") == "true"
     assert screen_with("Применить расписание", control=True).get("checkable") == "false"
     screenshot("import-confirmed")
     tap("Применить расписание")
-    screen_with("Расписание применено")
+    screen_with("Тестовое расписание применено")
     screenshot("import-success")
     tap("Вернуться к табло")
+    screen_with("ТЕСТОВОЕ РАСПИСАНИЕ")
     screen_with("15:15")
     screenshot("import-board-test-fixture")
-    (output / "result.txt").write_text("PASS: signed APK install, LAUNCHER, no HOME entry point, touch settings/theme/scale, cold process restart; import test-source block/cancel/confirm/apply/result/board\n")
+    run("shell", "am", "force-stop", package)
+    run("shell", "am", "start", "-W", "-n", component)
+    screen_with("ТЕСТОВОЕ РАСПИСАНИЕ")
+    screen_with("15:15")
+    screenshot("restored-test-schedule-banner")
+    (output / "result.txt").write_text("PASS: signed APK install, LAUNCHER, no HOME entry point, touch settings/theme/scale, cold process restart; unapproved test-source block/cancel; approved phone-test acknowledge/apply/result/board; persistent banner after restart\n")
 finally:
     (output / "android-runtime.txt").write_text(run("logcat", "-d", "-t", "150", "-s", "AndroidRuntime"))

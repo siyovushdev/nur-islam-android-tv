@@ -31,7 +31,7 @@ class PhoneImportReviewTest {
     private fun candidate(approved: Boolean = true, test: Boolean = false): ValidatedSchedule {
         // Fabricated UI fixtures only; source labels exercise the approval states, not authenticity.
         val json = ScheduleFixtures.json(approved = approved).apply {
-            addProperty("source", if (test) "ТЕСТ: конвертация Excel, не официальный календарь" else "Календарь мечети, протокол 42")
+            addProperty("source", if (test) "ТЕСТ ДЛЯ ТЕЛЕФОНА: конвертация Excel" else "Календарь мечети, протокол 42")
         }
         return ScheduleJson.parse(json.toString().toByteArray())
     }
@@ -74,20 +74,24 @@ class PhoneImportReviewTest {
         compose.onNodeWithTag("import-confirmation").performClick().assertIsOff()
         compose.onNodeWithTag("import-apply").assertIsNotEnabled()
     }
-    @Test fun unapprovedAndExplicitExcelTestSourcesStayBlockedEvenWithApprovedTrue() {
+    @Test fun approvedPhoneTestSourceNeedsExplicitDemoAcknowledgement() {
         assertFalse(isTestScheduleSource("Latest calendar, протокол 42"))
-        assertTrue(isTestScheduleSource("ТЕСТОВОЕ расписание из Excel"))
-        assertTrue(isTestScheduleSource("Excel TEST2026"))
+        assertTrue(isTestScheduleSource("ТЕСТ ДЛЯ ТЕЛЕФОНА"))
         show(test = true)
         compose.onNodeWithTag("import-source-warning").assertTextContains("ТЕСТОВЫЙ", substring = true)
-        compose.onNodeWithTag("import-confirmation").assertIsNotEnabled().assertIsOff()
+        compose.onNodeWithText("Подтверждаю: источник утверждён мечетью").assertDoesNotExist()
+        compose.onNodeWithText("Понимаю: тестовое расписание не утверждено мечетью").assertIsDisplayed()
+        compose.onNodeWithTag("import-confirmation").assertIsEnabled().assertIsOff()
         compose.onNodeWithTag("import-apply").assertIsNotEnabled().performClick()
-        key(Key.DirectionDown); key(Key.Enter); key(Key.DirectionDown); key(Key.Enter)
         assertEquals(0, applications)
-        image("import-after-test-source")
+        image("phone-test-source-unconfirmed")
+        compose.onNodeWithTag("import-confirmation").performClick().assertIsOn()
+        compose.onNodeWithTag("import-apply").assertIsEnabled().performClick()
+        assertEquals(1, applications)
+        image("phone-test-source-confirmed")
     }
     @Test fun unapprovedFileCannotBeConfirmed() {
-        show(approved = false)
+        show(approved = false, test = true)
         compose.onNodeWithTag("import-confirmation").assertIsNotEnabled()
         compose.onNodeWithTag("import-apply").assertIsNotEnabled()
     }

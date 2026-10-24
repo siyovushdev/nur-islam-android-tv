@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.nurislam.tv.BuildConfig
 import dev.nurislam.tv.data.ScheduleState
 import dev.nurislam.tv.data.ValidatedSchedule
 import dev.nurislam.tv.domain.formatTime
@@ -56,7 +57,8 @@ fun ScheduleImportPreview(
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
     val testSource = isTestScheduleSource(candidate.metadata.source)
-    val eligible = candidate.metadata.approved && !testSource
+    val phoneTest = testSource && BuildConfig.PHONE_PREVIEW
+    val eligible = candidate.metadata.approved && (!testSource || phoneTest)
     val canApply = eligible && confirmed && !busy
     fun apply() { if (canApply) onApply() }
     fun cancel() { if (!busy) onCancel() }
@@ -136,13 +138,15 @@ fun ScheduleImportPreview(
                     .heightIn(min = 48.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = confirmed, onCheckedChange = null, enabled = eligible && !busy,
                         colors = CheckboxDefaults.colors(checkedColor = colors.Gold, checkmarkColor = colors.Deep, uncheckedColor = colors.Secondary))
-                    Text("Подтверждаю: источник утверждён мечетью", color = if (eligible) colors.Text else colors.Secondary,
+                    Text(if (phoneTest) "Понимаю: тестовое расписание не утверждено мечетью" else "Подтверждаю: источник утверждён мечетью", color = if (eligible) colors.Text else colors.Secondary,
                         fontSize = (28 * s).sp, modifier = Modifier.padding(start = 8.dp))
                 }
                 Text(when {
-                    testSource -> "Тестовый файл можно просмотреть, но нельзя применить для работы мечети."
                     !candidate.metadata.approved -> "Применение запрещено: approved=false. Нужен утверждённый файл."
+                    testSource && !phoneTest -> "Тестовый файл можно просмотреть, но нельзя применить для работы мечети."
                     busy -> "Применение расписания…"
+                    phoneTest -> if (confirmed) "Будет применено только для демонстрации, не для работы мечети."
+                        else "Для демонстрации подтвердите, что понимаете тестовый статус."
                     !confirmed -> "Сначала подтвердите источник выше."
                     else -> if (schedules.current != null) "Готово к применению. Текущая версия сохранится для отката."
                         else "Готово к применению. Первый календарь будет сохранён."
@@ -174,6 +178,7 @@ fun ScheduleImportResult(schedule: ValidatedSchedule, touchMode: Boolean, onBoar
     var selection by remember { mutableIntStateOf(0) }
     val focus = remember { FocusRequester() }
     val colors = LocalBoardAppearance.current
+    val testSource = isTestScheduleSource(schedule.metadata.source)
     LaunchedEffect(Unit) { focus.requestFocus() }
     BackHandler(onBack = onDismiss)
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.Deep).testTag("import-result")
@@ -190,7 +195,8 @@ fun ScheduleImportResult(schedule: ValidatedSchedule, touchMode: Boolean, onBoar
         val s = if (touchMode) .5f else minOf(maxWidth.value / 1080f, maxHeight.value / 1080f)
         Column(Modifier.fillMaxSize().padding(if (touchMode) 16.dp else (40 * s).dp)) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                Text("Расписание применено", color = colors.Gold, fontSize = (40 * s).sp, fontWeight = FontWeight.Bold)
+                Text(if (testSource) "Тестовое расписание применено" else "Расписание применено", color = colors.Gold, fontSize = (40 * s).sp, fontWeight = FontWeight.Bold)
+                if (testSource) Text("Не утверждено мечетью. Только для демонстрации.", color = colors.Gold, fontSize = (28 * s).sp)
                 Text("Табло обновлено. Сохранено ${schedule.days.size} дней на ${schedule.metadata.year} год.", color = colors.Text, fontSize = (30 * s).sp)
                 Text("Источник: ${schedule.metadata.source}", color = colors.Secondary, fontSize = (26 * s).sp, modifier = Modifier.padding(vertical = 12.dp))
                 Text("Управление версиями и откат — в разделе «Расписание».", color = colors.Secondary, fontSize = (24 * s).sp)

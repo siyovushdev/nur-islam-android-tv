@@ -116,6 +116,7 @@ class PhoneActivityTest {
             for (mode in DisplayMode.entries) for (scale in listOf(.85f, 1f, 1.15f)) {
                 runBlocking { app.settings.update { it.copy(theme = theme, displayMode = mode, textScale = scale) } }
                 compose.waitForIdle()
+                compose.onNodeWithTag("test-schedule-banner").assertIsDisplayed()
                 val viewport = compose.onNodeWithTag("phone-viewport").fetchSemanticsNode().boundsInRoot
                 val board = compose.onNodeWithTag("prayer-board").fetchSemanticsNode().boundsInRoot
                 assertTrue("$theme / $mode / $scale: board left", board.left >= viewport.left - 1f)
@@ -157,6 +158,33 @@ class PhoneActivityTest {
         assertNull(vm.candidate.value)
         assertNull(app.schedules.state.value.current)
         compose.onNodeWithText("Импорт JSON — выбрать файл").assertIsDisplayed()
+    }
+
+    @Test fun phoneTestJsonCanBeAppliedWithPersistentBannerAfterRecreation() {
+        val uri = android.net.Uri.parse("content://test.documents/nur-islam-kazan-2026-TEST.json")
+        val year = Instant.now().atZone(MoscowZone).year
+        val json = ScheduleFixtures.json(year, "phone-demo", meaning = "PRAYER_START").apply {
+            addProperty("source", "ТЕСТ ДЛЯ ТЕЛЕФОНА")
+        }
+        shadowOf(app.contentResolver).registerInputStream(uri, json.toString().byteInputStream())
+        val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java]
+        openSettings(); tap("Расписание")
+        compose.runOnIdle { vm.import(uri) }; waitIo()
+        compose.onNodeWithTag("import-apply").assertIsNotEnabled()
+        compose.onNodeWithText("Подтверждаю: источник утверждён мечетью").assertDoesNotExist()
+        compose.onNodeWithText("Понимаю: тестовое расписание не утверждено мечетью").performClick()
+        compose.onNodeWithTag("import-apply").assertIsEnabled().performClick(); waitIo()
+        assertEquals("ТЕСТ ДЛЯ ТЕЛЕФОНА", app.schedules.state.value.current!!.metadata.source)
+        compose.onNodeWithText("Тестовое расписание применено").assertIsDisplayed()
+        compose.onNodeWithText("Вернуться к табло").performClick()
+        compose.onNodeWithTag("test-schedule-banner").assertIsDisplayed().assertTextEquals("ТЕСТОВОЕ РАСПИСАНИЕ")
+        compose.onNodeWithTag("row-ASR").assert(hasAnyDescendant(hasText("15:15")))
+        compose.mainClock.advanceTimeBy(20_000)
+        compose.onNodeWithTag("test-schedule-banner").assertIsDisplayed()
+        compose.activityRule.scenario.recreate()
+        compose.onNodeWithTag("test-schedule-banner").assertIsDisplayed()
+        compose.onNodeWithTag("row-ASR").assert(hasAnyDescendant(hasText("15:15")))
+        screenshot("test-schedule-banner")
     }
 
 }
