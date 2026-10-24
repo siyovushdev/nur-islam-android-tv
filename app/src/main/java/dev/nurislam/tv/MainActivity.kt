@@ -19,6 +19,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -111,10 +117,10 @@ class MainActivity : ComponentActivity() {
     }
     override fun onStart() {
         super.onStart()
-        ContextCompat.registerReceiver(this, unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT), ContextCompat.RECEIVER_NOT_EXPORTED)
+        if (!BuildConfig.PHONE_PREVIEW) ContextCompat.registerReceiver(this, unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT), ContextCompat.RECEIVER_NOT_EXPORTED)
     }
     override fun onStop() {
-        unregisterReceiver(unlockReceiver)
+        if (!BuildConfig.PHONE_PREVIEW) unregisterReceiver(unlockReceiver)
         if (::deviceSetup.isInitialized && deviceSetup.trialDeadline != null) {
             setupJob?.cancel()
             try { deviceSetup.cancelTrial() }
@@ -131,16 +137,21 @@ class MainActivity : ComponentActivity() {
     private fun fullscreen() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.systemBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            if (BuildConfig.PHONE_PREVIEW) show(WindowInsetsCompat.Type.systemBars())
+            else {
+                hide(WindowInsetsCompat.Type.systemBars())
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
         }
     }
     override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (hasFocus) fullscreen() }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        deviceSetup = DeviceSetupController(AndroidDeviceAccess(this), SetupPreferences.from(this))
-        setupOpen = !deviceSetup.preferences.completed
-        refreshDevice()
+        if (!BuildConfig.PHONE_PREVIEW) {
+            deviceSetup = DeviceSetupController(AndroidDeviceAccess(this), SetupPreferences.from(this))
+            setupOpen = !deviceSetup.preferences.completed
+            refreshDevice()
+        }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         fullscreen()
         setContent {
@@ -174,7 +185,7 @@ class MainActivity : ComponentActivity() {
                 catch (_: ActivityNotFoundException) { vm.message(failure) }
                 catch (_: SecurityException) { vm.message(failure) }
             }
-            BackHandler(!admin) { /* HOME board stays visible; settings provide a deliberate exit. */ }
+            BackHandler(!admin && !BuildConfig.PHONE_PREVIEW) { /* HOME board stays visible; settings provide a deliberate exit. */ }
             NurIslamTheme(settings.theme) {
                 CompositionLocalProvider(LocalBoardSettings provides settings) {
                     val now = rememberBoardClock()
@@ -185,6 +196,7 @@ class MainActivity : ComponentActivity() {
                     val status = remember(schedules, minute) { prayerStatus(minute, schedules) }
                     val next = (status as? PrayerStatus.Upcoming)?.prayer
                     BoxWithConstraints(Modifier.fillMaxSize().background(LocalBoardAppearance.current.Deep)
+                        .then(if (BuildConfig.PHONE_PREVIEW) Modifier.safeDrawingPadding() else Modifier)
                         .onPreviewKeyEvent { e ->
                             if (admin || setupOpen) false else {
                                 val key = e.nativeKeyEvent
@@ -199,70 +211,107 @@ class MainActivity : ComponentActivity() {
                             }
                         }.focusRequester(focus).focusable()) {
                         val resolved = resolveDisplayMode(mode, constraints.maxWidth, constraints.maxHeight)
-                        RotatedBoard(mode, Modifier.fillMaxSize()) {
-                            Box(Modifier.fillMaxSize()) {
-                                PrayerBoardScreen(minute, now, day, next, resolved == DisplayMode.LANDSCAPE, false, status = status,
-                                    notice = if (setupMessage != null && !setupOpen) setupMessage else if (schedules.problem != null) stringResource(R.string.storage_notice) else if (showEntryHint) stringResource(R.string.settings_hint) else null)
-                                if (admin && !setupOpen) AdminPanel(settings, schedules, candidate, busy, message, BuildConfig.VERSION_NAME,
-                                    getExternalFilesDir(null)?.absolutePath ?: "Папка недоступна",
-                                    focusToken = orientation,
-                                    onSettings = { change -> vm.settings(change) },
-                                    onOrientation = { orientation = OrientationPreview(it, SystemClock.elapsedRealtime() + 15_000) },
-                                    onPickFile = {
-                                        try { picker.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
-                                        catch (_: ActivityNotFoundException) { vm.message("Файловый диалог SAF отсутствует. Используйте импорт из локальной папки; инструкция в docs/TV_OPERATIONS.md.") }
-                                        catch (_: SecurityException) { vm.message("Доступ к файловому диалогу запрещён. Доступен импорт из локальной папки.") }
-                                    },
-                                    onInbox = { vm.importInbox() }, onApply = { vm.applyCandidate() }, onRollback = { vm.rollback() },
-                                    onDismissCandidate = vm::dismissCandidate, onDismissMessage = vm::dismissMessage,
-                                    onTimeSettings = { launchSafely(Intent(Settings.ACTION_DATE_SETTINGS), "Настройки даты и времени недоступны. Откройте системные настройки вручную.") },
-                                    onDeviceSetup = { refreshDevice(); setupOpen = true },
-                                    onHomeSettings = {
-                                        try { startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) }
-                                        catch (_: ActivityNotFoundException) { launchSafely(Intent(Settings.ACTION_SETTINGS), "Системные настройки недоступны. Используйте инструкцию ADB для возврата штатного HOME.") }
-                                        catch (_: SecurityException) { vm.message("Открытие настроек запрещено прошивкой. Используйте инструкцию восстановления через ADB.") }
-                                    },
-                                    onOtherLauncher = { launchSafely(Intent.createChooser(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), "Выберите штатный лаунчер").putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(componentName)), "Нет доступного лаунчера. Откройте системные настройки HOME или используйте ADB.") },
-                                    onClose = { admin = false; vm.cancelPendingImport(); vm.dismissCandidate(); vm.dismissMessage() })
-                                if (setupOpen) {
-                                    // Revision also tracks non-persistent trial/proof state of the controller.
-                                    @Suppress("UNUSED_VARIABLE") val revision = setupRevision
-                                    DeviceSetupWizard(deviceStatus, deviceSetup.preferences.kiosk, deviceSetup.trialDeadline,
-                                        deviceSetup.exitTested, setupBusy, setupMessage,
-                                        onDismissMessage = { setupMessage = null },
-                                        onAction = { action ->
-                                            setupOperation {
-                                                when (action) {
-                                                    SetupAction.REFRESH -> Unit
-                                                    SetupAction.REQUEST_HOME -> {
-                                                        try { homePicker.launch(deviceSetup.access.homeRequest()) }
-                                                        catch (_: RuntimeException) { openHomeSettings() }
-                                                    }
-                                                    SetupAction.HOME_SETTINGS -> openHomeSettings()
-                                                    SetupAction.MANAGED_HOME -> deviceSetup.setManagedHome()
-                                                    SetupAction.START_TRIAL -> deviceSetup.startTrial()
-                                                    SetupAction.FINISH_TRIAL -> deviceSetup.finishTrialByRemote()
-                                                    SetupAction.CANCEL_TRIAL -> deviceSetup.cancelTrial()
-                                                    SetupAction.ENABLE_KIOSK -> deviceSetup.enableKiosk()
-                                                    SetupAction.DISABLE_KIOSK -> deviceSetup.disableKiosk()
-                                                    SetupAction.RELEASE_HOME -> { deviceSetup.releaseHome(); openHomeSettings() }
-                                                    SetupAction.PROVISION -> {
-                                                        val facts = deviceSetup.access.status()
-                                                        check(facts.provisioningAllowed && facts.legacyProvisioningAvailable && !facts.deviceOwner) { "Первоначальный provisioning сейчас недоступен. Используйте согласованный путь производителя при начальной настройке устройства." }
-                                                        provisioningPicker.launch(deviceSetup.access.legacyProvisioningRequest())
-                                                    }
-                                                    SetupAction.FINISH -> { deviceSetup.preferences.completed(true); setupOpen = false; admin = false }
-                                                    SetupAction.APP_SETTINGS -> { deviceSetup.preferences.completed(true); setupOpen = false; admin = true }
-                                                    SetupAction.TEST_HOME -> { deviceSetup.preferences.completed(true); setupOpen = false; admin = false; startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)) }
+                        val board: @Composable () -> Unit = {
+                            PrayerBoardScreen(minute, now, day, next, resolved == DisplayMode.LANDSCAPE, false, status = status,
+                                notice = if (setupMessage != null && !setupOpen) setupMessage else if (schedules.problem != null) stringResource(R.string.storage_notice) else if (showEntryHint && !BuildConfig.PHONE_PREVIEW) stringResource(R.string.settings_hint) else null)
+                        }
+                        val overlays: @Composable () -> Unit = {
+                            if (admin && !setupOpen) AdminPanel(settings, schedules, candidate, busy, message, BuildConfig.VERSION_NAME,
+                                getExternalFilesDir(null)?.absolutePath ?: "Папка недоступна",
+                                focusToken = orientation, touchMode = BuildConfig.PHONE_PREVIEW,
+                                onSettings = { change -> vm.settings(change) },
+                                onOrientation = { orientation = OrientationPreview(it, SystemClock.elapsedRealtime() + 15_000) },
+                                onPickFile = {
+                                    try { picker.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
+                                    catch (_: ActivityNotFoundException) { vm.message("Файловый диалог SAF отсутствует. Используйте импорт из локальной папки; инструкция в docs/TV_OPERATIONS.md.") }
+                                    catch (_: SecurityException) { vm.message("Доступ к файловому диалогу запрещён. Доступен импорт из локальной папки.") }
+                                },
+                                onInbox = { vm.importInbox() }, onApply = { vm.applyCandidate() }, onRollback = { vm.rollback() },
+                                onDismissCandidate = vm::dismissCandidate, onDismissMessage = vm::dismissMessage,
+                                onTimeSettings = { launchSafely(Intent(Settings.ACTION_DATE_SETTINGS), "Настройки даты и времени недоступны. Откройте системные настройки вручную.") },
+                                onDeviceSetup = if (BuildConfig.PHONE_PREVIEW) null else ({ refreshDevice(); setupOpen = true }),
+                                onHomeSettings = {
+                                    try { startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) }
+                                    catch (_: ActivityNotFoundException) { launchSafely(Intent(Settings.ACTION_SETTINGS), "Системные настройки недоступны. Используйте инструкцию ADB для возврата штатного HOME.") }
+                                    catch (_: SecurityException) { vm.message("Открытие настроек запрещено прошивкой. Используйте инструкцию восстановления через ADB.") }
+                                },
+                                onOtherLauncher = { launchSafely(Intent.createChooser(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), "Выберите штатный лаунчер").putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(componentName)), "Нет доступного лаунчера. Откройте системные настройки HOME или используйте ADB.") },
+                                onClose = {
+                                    admin = false
+                                    vm.cancelPendingImport()
+                                    vm.dismissCandidate()
+                                    vm.dismissMessage()
+                                })
+                            if (setupOpen) {
+                                // Revision also tracks non-persistent trial/proof state of the controller.
+                                @Suppress("UNUSED_VARIABLE") val revision = setupRevision
+                                DeviceSetupWizard(deviceStatus, deviceSetup.preferences.kiosk, deviceSetup.trialDeadline,
+                                    deviceSetup.exitTested, setupBusy, setupMessage,
+                                    onDismissMessage = { setupMessage = null },
+                                    onAction = { action ->
+                                        setupOperation {
+                                            when (action) {
+                                                SetupAction.REFRESH -> Unit
+                                                SetupAction.REQUEST_HOME -> {
+                                                    try { homePicker.launch(deviceSetup.access.homeRequest()) }
+                                                    catch (_: RuntimeException) { openHomeSettings() }
                                                 }
+                                                SetupAction.HOME_SETTINGS -> openHomeSettings()
+                                                SetupAction.MANAGED_HOME -> deviceSetup.setManagedHome()
+                                                SetupAction.START_TRIAL -> deviceSetup.startTrial()
+                                                SetupAction.FINISH_TRIAL -> deviceSetup.finishTrialByRemote()
+                                                SetupAction.CANCEL_TRIAL -> deviceSetup.cancelTrial()
+                                                SetupAction.ENABLE_KIOSK -> deviceSetup.enableKiosk()
+                                                SetupAction.DISABLE_KIOSK -> deviceSetup.disableKiosk()
+                                                SetupAction.RELEASE_HOME -> { deviceSetup.releaseHome(); openHomeSettings() }
+                                                SetupAction.PROVISION -> {
+                                                    val facts = deviceSetup.access.status()
+                                                    check(facts.provisioningAllowed && facts.legacyProvisioningAvailable && !facts.deviceOwner) { "Первоначальный provisioning сейчас недоступен. Используйте согласованный путь производителя при начальной настройке устройства." }
+                                                    provisioningPicker.launch(deviceSetup.access.legacyProvisioningRequest())
+                                                }
+                                                SetupAction.FINISH -> { deviceSetup.preferences.completed(true); setupOpen = false; admin = false }
+                                                SetupAction.APP_SETTINGS -> { deviceSetup.preferences.completed(true); setupOpen = false; admin = true }
+                                                SetupAction.TEST_HOME -> { deviceSetup.preferences.completed(true); setupOpen = false; admin = false; startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)) }
                                             }
-                                        })
+                                        }
+                                    })
+                            }
+                            orientation?.let { preview ->
+                                OrientationConfirmation(preview, touchMode = BuildConfig.PHONE_PREVIEW, onConfirm = {
+                                    if (!preview.expired(SystemClock.elapsedRealtime())) vm.settings({ it.copy(displayMode = preview.candidate) }) { orientation = null }
+                                }, onCancel = { orientation = null })
+                            }
+                        }
+                        if (BuildConfig.PHONE_PREVIEW) {
+                            Column(Modifier.fillMaxSize()) {
+                                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Нур Ислам · тест", color = LocalBoardAppearance.current.Secondary,
+                                        fontSize = 14.sp, modifier = Modifier.weight(1f))
+                                    TextButton(onClick = {
+                                        orientation = null
+                                        if (admin) {
+                                            admin = false
+                                            vm.cancelPendingImport()
+                                            vm.dismissCandidate()
+                                            vm.dismissMessage()
+                                        } else {
+                                            admin = true
+                                        }
+                                    }, modifier = Modifier.testTag("phone-settings")) {
+                                        Text(if (admin) "Табло" else "Настройки", color = LocalBoardAppearance.current.Gold, fontSize = 16.sp)
+                                    }
                                 }
-                                orientation?.let { preview ->
-                                    OrientationConfirmation(preview, onConfirm = {
-                                        if (!preview.expired(SystemClock.elapsedRealtime())) vm.settings({ it.copy(displayMode = preview.candidate) }) { orientation = null }
-                                    }, onCancel = { orientation = null })
+                                Box(Modifier.weight(1f).fillMaxWidth()) {
+                                    PhoneBoardViewport(mode) {
+                                        RotatedBoard(mode, Modifier.fillMaxSize(), board)
+                                    }
+                                    overlays()
                                 }
+                            }
+                        } else {
+                            RotatedBoard(mode, Modifier.fillMaxSize()) {
+                                Box(Modifier.fillMaxSize()) { board(); overlays() }
                             }
                         }
                     }

@@ -13,10 +13,18 @@ android {
         versionCode = 2
         versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("boolean", "PHONE_PREVIEW", "false")
     }
     buildTypes {
         debug { applicationIdSuffix = ".debug"; versionNameSuffix = "-demo" }
         release { isMinifyEnabled = false }
+        create("phoneDebug") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".phone.debug"
+            versionNameSuffix = "-phone-preview"
+            buildConfigField("boolean", "PHONE_PREVIEW", "true")
+            matchingFallbacks += "debug"
+        }
     }
     buildFeatures { compose = true; buildConfig = true }
     sourceSets.getByName("androidTest").java.srcDir("src/sharedTest/java")
@@ -61,4 +69,8 @@ dependencies {
     add("testReleaseImplementation", "androidx.compose.ui:ui-test-junit4")
     add("testReleaseImplementation", "androidx.test.ext:junit:1.2.1")
     add("testReleaseImplementation", "org.robolectric:robolectric:4.15.1")
+    add("testPhoneDebugImplementation", platform("androidx.compose:compose-bom:2025.04.01"))
+    add("testPhoneDebugImplementation", "androidx.compose.ui:ui-test-junit4")
+    add("testPhoneDebugImplementation", "androidx.test.ext:junit:1.2.1")
+    add("testPhoneDebugImplementation", "org.robolectric:robolectric:4.15.1")
 }

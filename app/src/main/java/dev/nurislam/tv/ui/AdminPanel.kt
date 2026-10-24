@@ -48,6 +48,7 @@ fun AdminPanel(
     version: String,
     inboxPath: String,
     focusToken: Any? = null,
+    touchMode: Boolean = false,
     onSettings: ((AppSettings) -> AppSettings) -> Unit,
     onOrientation: (DisplayMode) -> Unit,
     onPickFile: () -> Unit,
@@ -62,7 +63,7 @@ fun AdminPanel(
     onOtherLauncher: () -> Unit,
     onClose: () -> Unit,
 ) {
-    var page by remember { mutableStateOf(AdminPage.ENTRY) }
+    var page by remember { mutableStateOf(if (touchMode) AdminPage.SETTINGS else AdminPage.ENTRY) }
     var selection by remember { mutableIntStateOf(0) }
     var approval by remember(candidate) { mutableStateOf(false) }
     var edit by remember { mutableStateOf<String?>(null) }
@@ -88,24 +89,24 @@ fun AdminPanel(
                 val field = edit
                 onSettings { if (field == "name") it.copy(mosqueName = text) else it.copy(location = text) }
                 edit = null
-            })
+            }, touchMode = touchMode)
         return
     }
     val data = schedules.current
     val entries = when {
         message != null -> listOf(AdminItem("Понятно", message) { onDismissMessage() })
         page == AdminPage.ENTRY -> listOf(AdminItem("Вернуться к табло") { onClose() }, AdminItem("Открыть настройки администратора", "Изменения расписания требуют отдельного подтверждения") { navigate(AdminPage.SETTINGS) })
-        page == AdminPage.SETTINGS -> listOf(
+        page == AdminPage.SETTINGS -> listOfNotNull(
             AdminItem("Вернуться к табло") { onClose() },
-            AdminItem("Тема: ${settings.theme}", "OK — переключить Elegant / Classic") { onSettings { it.copy(theme = if (it.theme == BoardThemeId.ELEGANT) BoardThemeId.CLASSIC else BoardThemeId.ELEGANT) } },
+            AdminItem("Тема: ${settings.theme}", if (touchMode) "Нажмите для переключения Elegant / Classic" else "OK — переключить Elegant / Classic") { onSettings { it.copy(theme = if (it.theme == BoardThemeId.ELEGANT) BoardThemeId.CLASSIC else BoardThemeId.ELEGANT) } },
             AdminItem("Ориентация: ${settings.displayMode}", "Выбрать режим экрана; подтверждение за 15 секунд") { navigate(AdminPage.DISPLAY); selection = settings.displayMode.ordinal + 1 },
-            AdminItem("Масштаб текста: ${(settings.textScale * 100).toInt()}%", "OK — 85 / 100 / 115%; текст подбирается под доступное место") { onSettings { it.copy(textScale = when { it.textScale < 1f -> 1f; it.textScale == 1f -> 1.15f; else -> .85f }) } },
+            AdminItem("Масштаб текста: ${(settings.textScale * 100).toInt()}%", "${if (touchMode) "Нажмите" else "OK"} — 85 / 100 / 115%; текст подбирается под доступное место") { onSettings { it.copy(textScale = when { it.textScale < 1f -> 1f; it.textScale == 1f -> 1.15f; else -> .85f }) } },
             AdminItem("Язык: ${when (settings.language) { BoardLanguage.BOTH -> "Татарский + русский"; BoardLanguage.TATAR -> "Татарский"; BoardLanguage.RUSSIAN -> "Русский" }}") { onSettings { it.copy(language = BoardLanguage.entries[(it.language.ordinal + 1) % BoardLanguage.entries.size]) } },
-            AdminItem("Название: ${settings.mosqueName}", "Экранная клавиатура управляется D-pad") { edit = "name" },
+            AdminItem("Название: ${settings.mosqueName}", if (touchMode) "Ввод с клавиатуры телефона" else "Экранная клавиатура управляется D-pad") { edit = "name" },
             AdminItem("Местоположение: ${settings.location}", "Меняет подпись, но не часовой пояс и расписание") { edit = "location" },
             AdminItem("Расписание", data?.let { "Последний импорт: ${it.metadata.year} · ${it.metadata.revision}" } ?: "Нет утверждённого календаря") { navigate(AdminPage.SCHEDULE) },
             AdminItem("Диагностика") { navigate(AdminPage.DIAGNOSTICS) },
-            AdminItem("Основной экран HOME / безопасный выход") { navigate(AdminPage.HOME) },
+            if (touchMode) null else AdminItem("Основной экран HOME / безопасный выход") { navigate(AdminPage.HOME) },
             AdminItem("Икамат: не настроен", "Нужны утверждённые правила мечети. Автоматические интервалы отключены.", false) {},
         )
         page == AdminPage.DISPLAY -> listOf(AdminItem("Назад") { navigate(AdminPage.SETTINGS) }) + DisplayMode.entries.map { mode ->
@@ -173,7 +174,7 @@ fun AdminPanel(
                 true
             }
         }.focusRequester(focus).focusable()) {
-        val s = minOf(maxWidth.value / 1080f, maxHeight.value / 1080f)
+        val s = if (touchMode) .5f else minOf(maxWidth.value / 1080f, maxHeight.value / 1080f)
         val colors = LocalBoardAppearance.current
         Column(Modifier.fillMaxSize().padding(horizontal = maxWidth * .055f, vertical = maxHeight * .05f)) {
             Text(if (busy) "Выполняется операция…" else if (page == AdminPage.ENTRY) "Вход в настройки" else when (page) {
@@ -186,15 +187,16 @@ fun AdminPanel(
                 AdminPage.DIAGNOSTICS -> "Диагностика"
                 AdminPage.HOME -> "Основной экран HOME"
             }, color = colors.Gold, fontSize = (40 * s).sp, modifier = Modifier.padding(bottom = (20 * s).dp))
-            Text("↑ ↓ — выбор · OK — действие · BACK — назад", color = colors.Secondary, fontSize = (24 * s).sp, modifier = Modifier.padding(bottom = (20 * s).dp))
-            LazyColumn(state = scroll, modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy((10 * s).dp)) {
+            Text(if (touchMode) "Нажмите пункт · Прокрутите список · Назад — отмена" else "↑ ↓ — выбор · OK — действие · BACK — назад", color = colors.Secondary, fontSize = (24 * s).sp, modifier = Modifier.padding(bottom = (20 * s).dp))
+            LazyColumn(state = scroll, modifier = Modifier.weight(1f).fillMaxWidth().testTag("admin-list"), verticalArrangement = Arrangement.spacedBy((10 * s).dp)) {
                 itemsIndexed(entries) { index, entry ->
                     val active = selection == index
                     val shape = RoundedCornerShape((12 * s).dp)
                     Column(Modifier.fillMaxWidth().semantics { selected = active }.testTag("admin-item-$index")
                         .background(if (active) colors.Gold else colors.Card, shape)
                         .border((2 * s).dp, if (active) colors.Gold else colors.Outline.copy(alpha = .4f), shape)
-                        .clickable(enabled = entry.enabled && !busy) { selection = index; entry.action() }.padding((20 * s).dp)) {
+                        .clickable(enabled = entry.enabled && !busy) { selection = index; entry.action() }
+                        .then(if (touchMode) Modifier.heightIn(min = 48.dp) else Modifier).padding((20 * s).dp)) {
                         Text(entry.title, color = if (active) colors.Deep else colors.Text, fontSize = (32 * s).sp, fontWeight = FontWeight.Bold)
                         if (entry.detail.isNotEmpty()) Text(entry.detail, color = if (active) colors.Deep else colors.Secondary, fontSize = (24 * s).sp)
                     }
