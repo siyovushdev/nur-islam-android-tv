@@ -53,13 +53,34 @@ fun prayersOn(date: LocalDate): List<IqamahPrayer> = IqamahPrayer.entries.filter
     if (date.dayOfWeek == DayOfWeek.FRIDAY) it != IqamahPrayer.DHUHR else it != IqamahPrayer.JUMUAH
 }
 
-data class IqamahEvent(val prayer: IqamahPrayer, val at: Instant, val start: Instant?, val rule: IqamahRule, val demo: Boolean)
+data class IqamahEvent(val prayer: IqamahPrayer, val at: Instant, val start: Instant?, val rule: IqamahRule, val demo: Boolean, val boundaryWarning: String? = null)
 data class IqamahDayRow(val prayer: IqamahPrayer, val start: Instant?, val event: IqamahEvent?, val detail: String)
 sealed interface IqamahStatus {
     data class Waiting(val event: IqamahEvent) : IqamahStatus
     data class Now(val event: IqamahEvent, val until: Instant, val dim: Boolean) : IqamahStatus
     data class Idle(val upcoming: IqamahEvent?, val detail: String) : IqamahStatus
     data class Conflict(val detail: String) : IqamahStatus
+}
+
+private data class PrayerBoundary(val prayer: IqamahPrayer, val date: LocalDate, val at: Instant?, val warning: String?)
+
+/** The four ordinary JSON fields have the same prayer-start contract as PrayerStatus.
+ * Fajr needs PRAYER_START; Friday's Dhuhr field never establishes Jumuah's start.
+ * No iqamah rule (or invented iqamah event) is required for a calendar boundary. */
+private fun followingPrayers(date: LocalDate, prayer: IqamahPrayer, calendars: ScheduleState): List<PrayerBoundary> {
+    fun boundary(day: LocalDate, p: IqamahPrayer): PrayerBoundary {
+        val calendar = calendars.scheduleFor(day)
+        val times = calendar?.day(day)?.times
+        val warning = when {
+            times == null -> "Нет календаря на $day: граница следующей молитвы ${p.title} не проверена"
+            p == IqamahPrayer.JUMUAH -> "Начало Джума не подтверждено: время Зухра из JSON не заменяет начало Джума"
+            p == IqamahPrayer.FAJR && calendar.fajrMeaning != FajrMeaning.PRAYER_START -> "Начало следующего Фаджра $day не подтверждено (fajrInMosque / UNCONFIRMED)"
+            else -> null
+        }
+        return PrayerBoundary(p, day, if (warning == null) day.atTime(times!!.getValue(p.event)).atZone(MoscowZone).toInstant() else null, warning)
+    }
+    val order = prayersOn(date).sortedBy { it.event.ordinal }
+    return order.drop(order.indexOf(prayer) + 1).map { boundary(date, it) } + boundary(date.plusDays(1), IqamahPrayer.FAJR)
 }
 
 /** Never interprets a raw column as a start without confirmation bound to this exact calendar. */
@@ -81,15 +102,18 @@ private fun rawIqamahDay(date: LocalDate, config: IqamahConfig, calendars: Sched
             else start!!.plusSeconds(rule.value * 60L)
         if (at.atZone(MoscowZone).toLocalDate() != date || (start != null && at < start))
             return@map IqamahDayRow(prayer, start, null, "$provenance · икамат раньше начала или за пределами суток")
-        val event = IqamahEvent(prayer, at, start, rule, !config.approved || isTestSource(calendar.metadata.source))
-        IqamahDayRow(prayer, start, event, provenance + if (start == null) " · начало не подтверждено" else " · база подтверждена")
+        val boundaryWarning = followingPrayers(date, prayer, calendars).first().warning?.let {
+            "$date · Икамат ${prayer.title}: $it. Согласованность с этой границей не установлена."
+        }
+        val event = IqamahEvent(prayer, at, start, rule, !config.approved || isTestSource(calendar.metadata.source), boundaryWarning)
+        IqamahDayRow(prayer, start, event, provenance + (if (start == null) " · начало не подтверждено" else " · база подтверждена") + (boundaryWarning?.let { " · $it" } ?: ""))
     }
 }
 
 /** Canonical prayer order is independent of the entered iqamah times. */
-data class IqamahConflict(val earlier: IqamahEvent, val later: IqamahEvent, val reason: String) {
-    val dates: Set<LocalDate> get() = setOf(earlier.at.atZone(MoscowZone).toLocalDate(), later.at.atZone(MoscowZone).toLocalDate())
-    val detail: String get() = "$reason: ${earlier.prayer.title} ${earlier.at.atZone(MoscowZone).toLocalDate()} ${earlier.at.atZone(MoscowZone).toLocalTime()} / ${later.prayer.title} ${later.at.atZone(MoscowZone).toLocalDate()} ${later.at.atZone(MoscowZone).toLocalTime()}"
+data class IqamahConflict(val earlier: IqamahEvent, val laterPrayer: IqamahPrayer, val laterAt: Instant, val reason: String, val prayerStart: Boolean = false) {
+    val dates: Set<LocalDate> get() = setOf(earlier.at.atZone(MoscowZone).toLocalDate(), laterAt.atZone(MoscowZone).toLocalDate())
+    val detail: String get() = "$reason: икамат ${earlier.prayer.title} ${earlier.at.atZone(MoscowZone).toLocalDate()} ${earlier.at.atZone(MoscowZone).toLocalTime()} / ${if (prayerStart) "начало молитвы" else "икамат"} ${laterPrayer.title} ${laterAt.atZone(MoscowZone).toLocalDate()} ${laterAt.atZone(MoscowZone).toLocalTime()}"
 }
 
 private fun evaluatedDays(dates: List<LocalDate>, config: IqamahConfig, calendars: ScheduleState): Pair<Map<LocalDate, List<IqamahDayRow>>, List<IqamahConflict>> {
@@ -105,7 +129,17 @@ private fun evaluatedDays(dates: List<LocalDate>, config: IqamahConfig, calendar
     val duration = if (config.dimMinutes == 0) 60L else config.dimMinutes * 60L
     val conflicts = mutableListOf<IqamahConflict>()
     events.forEachIndexed { index, earlier ->
-        val nextDate = earlier.at.atZone(MoscowZone).toLocalDate().plusDays(1)
+        val date = earlier.at.atZone(MoscowZone).toLocalDate()
+        for (boundary in followingPrayers(date, earlier.prayer, calendars)) {
+            val start = boundary.at ?: continue // Unknown semantics are diagnostics, not fabricated times.
+            val reason = when {
+                earlier.at >= start -> "Икамат не раньше следующего начала молитвы"
+                earlier.at.plusSeconds(duration) > start -> "Индикация икамата пересекает следующее начало молитвы"
+                else -> null
+            }
+            if (reason != null) conflicts += IqamahConflict(earlier, boundary.prayer, start, reason, prayerStart = true)
+        }
+        val nextDate = date.plusDays(1)
         for (later in events.subList(index + 1, events.size)) {
             if (later.at.atZone(MoscowZone).toLocalDate() > nextDate) break
             val reason = when {
@@ -113,7 +147,7 @@ private fun evaluatedDays(dates: List<LocalDate>, config: IqamahConfig, calendar
                 earlier.at.plusSeconds(duration) > (later.start ?: later.at) -> "Пересекаются ожидание или индикация икаматов"
                 else -> null
             }
-            if (reason != null) conflicts += IqamahConflict(earlier, later, reason)
+            if (reason != null) conflicts += IqamahConflict(earlier, later.prayer, later.at, reason)
         }
     }
     return rows to conflicts
@@ -134,6 +168,12 @@ fun iqamahConflicts(config: IqamahConfig, calendars: ScheduleState, from: LocalD
     val dates = listOfNotNull(calendars.current, calendars.previous).flatMap { it.days.keys }
         .distinct().filter { calendars.scheduleFor(it) != null }
     return evaluatedDays(dates, config, calendars).second.filter { conflict -> from == null || conflict.dates.any { it >= from } }
+}
+
+fun iqamahBoundaryWarnings(config: IqamahConfig, calendars: ScheduleState, from: LocalDate): List<String> {
+    val dates = listOfNotNull(calendars.current, calendars.previous).flatMap { it.days.keys }
+        .distinct().filter { it >= from && calendars.scheduleFor(it) != null }
+    return evaluatedDays(dates, config, calendars).first.values.flatten().mapNotNull { it.event?.boundaryWarning }.distinct()
 }
 
 fun iqamahCompatibilityWarning(date: LocalDate, config: IqamahConfig, calendars: ScheduleState): String? {

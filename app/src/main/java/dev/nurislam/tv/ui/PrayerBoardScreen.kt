@@ -50,10 +50,17 @@ fun PrayerBoardScreen(
     // changing typeface/palette; keep the clock, calendar and settings outside it.
     key(LocalBoardAppearance.current, LocalBoardSettings.current.textScale, landscape) {
     Column(Modifier.fillMaxSize()) {
-    if (iqamah is IqamahStatus.Conflict) BoxWithConstraints(Modifier.fillMaxWidth().background(LocalBoardAppearance.current.Deep)) {
-        Text(iqamah.detail, color = LocalBoardAppearance.current.Gold,
+    val boundaryWarning = when (iqamah) {
+        is IqamahStatus.Waiting -> iqamah.event.boundaryWarning
+        is IqamahStatus.Now -> iqamah.event.boundaryWarning
+        is IqamahStatus.Idle -> iqamah.upcoming?.boundaryWarning
+        else -> null
+    }
+    val diagnostic = (iqamah as? IqamahStatus.Conflict)?.detail ?: boundaryWarning
+    if (diagnostic != null) BoxWithConstraints(Modifier.fillMaxWidth().background(LocalBoardAppearance.current.Deep)) {
+        Text(diagnostic, color = LocalBoardAppearance.current.Gold,
             fontSize = if (maxWidth < 600.dp) 14.sp else 22.sp,
-            modifier = Modifier.fillMaxWidth().padding(12.dp).testTag("iqamah-conflict"))
+            modifier = Modifier.fillMaxWidth().padding(12.dp).testTag(if (iqamah is IqamahStatus.Conflict) "iqamah-conflict" else "iqamah-boundary-warning"))
     }
     BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().testTag("prayer-board")) {
         val scale = if (landscape) minOf(maxWidth.value / 1920f, maxHeight.value / 1080f)

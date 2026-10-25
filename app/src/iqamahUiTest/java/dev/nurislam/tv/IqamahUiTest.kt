@@ -304,6 +304,38 @@ class IqamahUiTest {
         assertFalse(app.iqamah.state.value.config.enabled)
         assertEquals(listOf(950, 930), app.iqamah.state.value.config.rules.map { it.value })
     }
+    @Test fun jumuahWithoutAsrRuleShowsBoundaryConflictAndBlocksTouchAndDpadSave() {
+        show(IqamahConfig(source = "TEST", rules = listOf(IqamahRule(IqamahPrayer.JUMUAH, date.minusDays(1), mode = IqamahMode.FIXED, value = 927))))
+        key(Key.Enter) // Enable.
+        key(Key.DirectionUp); key(Key.Enter) // Save footer.
+        compose.onNodeWithText("Подтвердить сохранение").assertIsNotEnabled().performClick()
+        key(Key.DirectionDown); key(Key.Enter)
+        assertNull(saved)
+        compose.onNodeWithTag("iqamah-list").performScrollToNode(hasText("Конфликт икаматов"))
+        compose.onAllNodesWithText("начало молитвы Аср", substring = true).onFirst().assertIsDisplayed()
+        image("jumuah-asr-boundary")
+    }
+    @Test fun unconfirmedBoundaryRemainsVisibleOnBoardAndAtConfirmationWithoutFalseBlocking() {
+        val day = date
+        val c = IqamahConfig(true, false, "TEST", rules = listOf(IqamahRule(IqamahPrayer.ISHA, day, mode = IqamahMode.FIXED, value = 1200)))
+        val unknown = ScheduleState(ScheduleFixtures.schedule(), loaded = true)
+        val clock = mutableStateOf(day.atTime(20, 0).atZone(MoscowZone).toInstant())
+        compose.activity.setContent { NurIslamTheme {
+            PrayerBoardScreen(clock.value, clock, unknown.current!!.day(day), null, false, false, iqamah = iqamahStatus(clock.value, c, unknown, true))
+        } }
+        compose.onNodeWithTag("iqamah-boundary-warning").assertIsDisplayed()
+        compose.onNodeWithText("UNCONFIRMED", substring = true).assertIsDisplayed()
+        compose.onNodeWithTag("iqamah-arrival").assertIsDisplayed()
+        image("unknown-boundary")
+        show(c.copy(enabled = false), knownFajr = false)
+        tap("Функция икамата")
+        compose.onNodeWithTag("iqamah-save").performClick()
+        compose.onNodeWithText("Подтвердить сохранение").assertIsEnabled()
+        compose.onNodeWithTag("iqamah-list").performScrollToNode(hasText("Граница молитвы не подтверждена"))
+        compose.onAllNodesWithText("UNCONFIRMED", substring = true).onFirst().assertIsDisplayed()
+        tap("Подтвердить сохранение")
+        assertTrue(saved!!.enabled)
+    }
     @Test @Config(sdk = [35], qualifiers = "w800dp-h360dp-xhdpi")
     fun longSourceAndLandscapeKeepSaveAndCancelVisible() {
         show(IqamahConfig(source = "Протокол ".repeat(20)))
@@ -341,8 +373,9 @@ class IqamahUiTest {
             compose.runOnIdle { status.value = IqamahStatus.Now(event, target.plusSeconds(300), true) }
             compose.onNodeWithTag("iqamah-dim").assertIsDisplayed()
             noTextOverflow()
-            val jumuah = event.copy(prayer = IqamahPrayer.JUMUAH, start = null)
-            compose.runOnIdle { status.value = IqamahStatus.Now(jumuah, target.plusSeconds(60), false) }
+            val jumuahAt = boardDate.atTime(13, 0).atZone(MoscowZone).toInstant()
+            val jumuah = IqamahEvent(IqamahPrayer.JUMUAH, jumuahAt, null, IqamahRule(IqamahPrayer.JUMUAH, boardDate, mode = IqamahMode.FIXED, value = 780), true)
+            compose.runOnIdle { clock.value = jumuahAt; status.value = IqamahStatus.Now(jumuah, jumuahAt.plusSeconds(60), false) }
             compose.onNodeWithTag("row-JUMUAH").assertIsDisplayed().assertHighlighted(true)
             compose.onNodeWithTag("row-JUMUAH").assert(hasAnyDescendant(hasText("Джума (пятница) · Икамат")))
             compose.onNodeWithTag("row-DHUHR").assertHighlighted(false).assert(hasAnyDescendant(hasText("12:05")))
@@ -354,7 +387,14 @@ class IqamahUiTest {
             compose.onNodeWithTag("row-JUMUAH").assertDoesNotExist()
             noTextOverflow()
             if (scale == 1f && mode == DisplayMode.LANDSCAPE) image("${theme.name.lowercase()}-conflict")
-            compose.runOnIdle { status.value = IqamahStatus.Waiting(event) }
+            val unknown = ScheduleState(ScheduleFixtures.schedule(), loaded = true)
+            val ishaAt = boardDate.atTime(20, 0).atZone(MoscowZone).toInstant()
+            val ishaRules = IqamahConfig(true, false, "TEST", rules = listOf(IqamahRule(IqamahPrayer.ISHA, boardDate, mode = IqamahMode.FIXED, value = 1200)))
+            compose.runOnIdle { clock.value = ishaAt; status.value = iqamahStatus(ishaAt, ishaRules, unknown, true) }
+            compose.onNodeWithTag("iqamah-boundary-warning").assertIsDisplayed()
+            compose.onNodeWithTag("row-ISHA").assertHighlighted(true)
+            noTextOverflow()
+            compose.runOnIdle { clock.value = target.minusSeconds(70); status.value = IqamahStatus.Waiting(event) }
         }
         val event = (status.value as IqamahStatus.Waiting).event
         compose.runOnIdle { clock.value = target; status.value = IqamahStatus.Now(event, target.plusSeconds(60), false) }

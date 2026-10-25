@@ -205,4 +205,71 @@ class IqamahTest {
         assertFalse(iqamahStatus(at("15:21", tomorrow), repaired, schedules, false) is IqamahStatus.Conflict)
     }
 
+    @Test fun fridayJumuahChecksAsrStartWithoutAnyAsrIqamahRule() {
+        val friday = date.minusDays(1)
+        for (asrRule in listOf<IqamahRule?>(null, rule(IqamahPrayer.ASR, IqamahMode.OFF, day = friday))) {
+            val j = rule(IqamahPrayer.JUMUAH, IqamahMode.FIXED, 927, friday, false)
+            val c = config(*listOfNotNull(j, asrRule).toTypedArray())
+            val unchanged = calendar.json
+            val conflicts = iqamahConflicts(c, schedules)
+            assertTrue(conflicts.any { it.earlier.prayer == IqamahPrayer.JUMUAH && it.prayerStart && it.laterPrayer == IqamahPrayer.ASR && it.laterAt == at("15:15", friday) })
+            val status = iqamahStatus(at("15:27", friday), c, schedules, false) as IqamahStatus.Conflict
+            assertTrue(status.detail.contains("начало молитвы Аср"))
+            assertTrue(status.detail.contains("15:15")); assertTrue(status.detail.contains("15:27"))
+            assertEquals(unchanged, calendar.json)
+            assertEquals(927, c.rule(IqamahPrayer.JUMUAH, friday)!!.value)
+        }
+    }
+    @Test fun ordinaryIqamahChecksAllLaterJsonPrayersWithoutTheirRules() {
+        val cases = listOf(IqamahPrayer.FAJR to 726, IqamahPrayer.DHUHR to 916, IqamahPrayer.ASR to 1069, IqamahPrayer.MAGHRIB to 1143)
+        for ((p, value) in cases) {
+            val c = config(rule(p, IqamahMode.FIXED, value, bound = false))
+            assertTrue(iqamahConflicts(c, schedules).any { it.earlier.prayer == p && it.prayerStart })
+            assertTrue(iqamahStatus(at("12:00"), c, schedules, false) is IqamahStatus.Conflict)
+        }
+    }
+    @Test fun correctRulesAndExactlyTouchingIndicationBoundaryStayAllowed() {
+        val valid = listOf(IqamahPrayer.FAJR to 342, IqamahPrayer.DHUHR to 914, IqamahPrayer.ASR to 930, IqamahPrayer.MAGHRIB to 1080, IqamahPrayer.ISHA to 1200)
+        for ((p, value) in valid) {
+            val c = config(rule(p, IqamahMode.FIXED, value))
+            assertTrue("$p", iqamahConflicts(c, schedules).isEmpty())
+            assertFalse(iqamahStatus(at("12:00"), c, schedules, false) is IqamahStatus.Conflict)
+        }
+        val friday = date.minusDays(1)
+        assertTrue(iqamahConflicts(config(rule(IqamahPrayer.JUMUAH, IqamahMode.FIXED, 780, friday, false)), schedules).isEmpty())
+        assertTrue(iqamahStatus(at("15:15"), config(rule(IqamahPrayer.DHUHR, IqamahMode.FIXED, 915)), schedules, false) is IqamahStatus.Conflict)
+        assertTrue(iqamahStatus(at("15:12"), config(rule(IqamahPrayer.DHUHR, IqamahMode.FIXED, 912), dim = 5), schedules, false) is IqamahStatus.Conflict)
+    }
+    @Test fun unknownNextFajrIsDiagnosticNotAnInventedStartOrFalseConflict() {
+        val json = ScheduleFixtures.json(meaning = null).apply {
+            addProperty("source", "Fixture protocol 42")
+            getAsJsonArray("days").forEach { it.asJsonObject.addProperty("fajrInMosque", "00:02") }
+        }
+        val unknown = ScheduleJson.parse(json.toString().toByteArray())
+        val state = ScheduleState(unknown, loaded = true)
+        val c = config(rule(IqamahPrayer.ISHA, IqamahMode.FIXED, 1439, bound = false), dim = 5)
+        assertTrue(iqamahConflicts(c, state).isEmpty())
+        val status = iqamahStatus(at("23:59"), c, state, false) as IqamahStatus.Now
+        assertTrue(status.event.boundaryWarning!!.contains("UNCONFIRMED"))
+        assertFalse(status.event.boundaryWarning!!.contains("00:02"))
+        assertTrue(iqamahDay(date, c, state).last().detail.contains("Согласованность"))
+        json.addProperty("fajrMeaning", "PRAYER_START")
+        val confirmed = ScheduleState(ScheduleJson.parse(json.toString().toByteArray()), loaded = true)
+        assertTrue(iqamahStatus(at("23:59"), c, confirmed, false) is IqamahStatus.Conflict)
+        assertTrue(iqamahConflicts(c, confirmed).any { it.prayerStart && it.laterPrayer == IqamahPrayer.FAJR })
+        val lastDay = LocalDate.of(2026, 12, 31)
+        val missingNextYear = iqamahStatus(at("23:59", lastDay), c, state, false) as IqamahStatus.Now
+        assertTrue(missingNextYear.event.boundaryWarning!!.contains("Нет календаря на 2027-01-01"))
+    }
+    @Test fun fridayDoesNotSubstituteDhuhrForUnknownJumuahStart() {
+        val friday = date.minusDays(1)
+        val c = config(rule(IqamahPrayer.FAJR, IqamahMode.FIXED, 730, friday, false))
+        assertFalse(iqamahStatus(at("12:10", friday), c, schedules, false) is IqamahStatus.Conflict)
+        val warning = (iqamahStatus(at("12:10", friday), c, schedules, false) as IqamahStatus.Now).event.boundaryWarning!!
+        assertTrue(warning.contains("Зухра из JSON не заменяет"))
+        assertTrue(iqamahBoundaryWarnings(c, schedules, friday).isNotEmpty())
+        val tooLate = config(rule(IqamahPrayer.FAJR, IqamahMode.FIXED, 927, friday, false))
+        assertTrue(iqamahConflicts(tooLate, schedules).any { it.laterPrayer == IqamahPrayer.ASR && it.prayerStart })
+    }
+
 }

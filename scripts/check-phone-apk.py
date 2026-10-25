@@ -154,14 +154,22 @@ try:
     screen_with("ТЕСТОВЫЕ ПРАВИЛА · не утверждены мечетью")
     screenshot("iqamah-defaults")
     tap("Функция икамата")
-    tap_scrolled("Аср")
-    tap("Режим: Отключено")
-    tap("Значение: не задано")
-    # Explicit fixed time in this disposable emulator; no system clock changes.
-    # Enter immediately before saving so the arrival can be checked by real elapsed time.
+    # Pick a synthetic demonstration prayer whose arrival window is before its
+    # next JSON prayer start. Missing iqamah rules must not bypass that boundary.
     device_seconds = int(run("shell", "date", "+%s").strip())
     target_seconds = (device_seconds // 60 + 2) * 60
     target = datetime.datetime.fromtimestamp(target_seconds, ZoneInfo("Europe/Moscow"))
+    slots = [("Фаджр", "05:30", "12:05"),
+             ("Джума (пятница)" if target.weekday() == 4 else "Зухр", "12:05", "15:15"),
+             ("Аср", "15:15", "17:48"), ("Магриб", "17:48", "19:02"), ("Иша", "19:02", None)]
+    for prayer_title, row_time, boundary in slots:
+        if boundary is None or target + datetime.timedelta(minutes=1) <= datetime.datetime.combine(target.date(), datetime.time.fromisoformat(boundary), ZoneInfo("Europe/Moscow")):
+            break
+    if prayer_title == "Джума (пятница)":
+        row_time = target.strftime("%H:%M")  # Jumuah's separate iqamah row, not JSON Dhuhr.
+    tap_scrolled(prayer_title)
+    tap("Режим: Отключено")
+    tap("Значение: не задано")
     tap("Цифры без разделителей")
     run("shell", "input", "text", target.strftime("%H%M"))
     run("shell", "input", "keyevent", "4")  # Hide only the phone IME.
@@ -193,7 +201,7 @@ try:
     highlighted = [node for node in ET.fromstring(arrival_xml).iter("node") if node.get("content-desc", "").endswith("; выделен")]
     assert len(highlighted) == 1, "Active iqamah must highlight exactly one schedule row"
     description = highlighted[0].get("content-desc")
-    assert "Аср" in description and "15:15" in description, "Arrival must highlight Asr's original JSON row"
+    assert prayer_title in description and row_time in description, "Arrival must highlight the configured prayer without replacing JSON times"
     assert highlighted[0].get("checkable") == "false", "Read-only row must not be exposed as a checkbox"
     time.sleep(60)
     # The arrival must finish instead of looping indefinitely.
