@@ -219,4 +219,31 @@ class PhoneActivityTest {
         screenshot("iqamah-today")
     }
 
+    @Test fun legacyConflictShowsOnBoardAndViewModelRejectsEnablingItWithoutChangingTimes() {
+        val today = Instant.now().atZone(MoscowZone).toLocalDate()
+        val calendar = ScheduleFixtures.schedule(today.year, meaning = "PRAYER_START")
+        runBlocking { app.schedules.apply(calendar) }
+        compose.waitUntil(10_000) { app.iqamah.state.value.loaded }
+        val bad = dev.nurislam.tv.iqamah.IqamahConfig(enabled = true, source = "TEST", rules = listOf(
+            dev.nurislam.tv.iqamah.IqamahRule(dev.nurislam.tv.iqamah.IqamahPrayer.DHUHR, today, mode = dev.nurislam.tv.iqamah.IqamahMode.FIXED, value = 950),
+            dev.nurislam.tv.iqamah.IqamahRule(dev.nurislam.tv.iqamah.IqamahPrayer.ASR, today, mode = dev.nurislam.tv.iqamah.IqamahMode.FIXED, value = 930)))
+        val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java]
+        compose.runOnIdle { vm.saveIqamah(bad) }; waitIo()
+        assertFalse(app.iqamah.state.value.config.enabled)
+        assertTrue(vm.message.value!!.contains("Конфликт икаматов"))
+        compose.runOnIdle { vm.dismissMessage() }
+        // A file from an older build or rollback must be guarded at runtime too.
+        runBlocking { app.iqamah.save(bad) }
+        compose.onNodeWithTag("iqamah-conflict").assertIsDisplayed()
+        compose.onNodeWithTag("iqamah-time").assertDoesNotExist()
+        assertEquals(listOf(950, 930), app.iqamah.state.value.config.rules.map { it.value })
+        assertEquals(calendar.json, app.schedules.state.value.current!!.json)
+        screenshot("iqamah-conflict")
+        compose.activityRule.scenario.recreate()
+        compose.onNodeWithTag("iqamah-conflict").assertIsDisplayed()
+        compose.runOnIdle { androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java].saveIqamah(bad.copy(enabled = false)) }; waitIo()
+        compose.onNodeWithTag("iqamah-conflict").assertDoesNotExist()
+        assertEquals(listOf(950, 930), app.iqamah.state.value.config.rules.map { it.value })
+    }
+
 }

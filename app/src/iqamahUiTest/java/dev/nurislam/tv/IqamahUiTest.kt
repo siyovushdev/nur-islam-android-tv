@@ -151,14 +151,19 @@ class IqamahUiTest {
         compose.onNodeWithText("До икамата · ТЕСТ").assertDoesNotExist()
         compose.runOnIdle { clock.value = start }
         compose.onNodeWithText("До икамата · ТЕСТ").assertIsDisplayed()
+        compose.onNodeWithTag("row-ASR").assertIsSelected()
+        compose.onNodeWithTag("row-MAGHRIB").assertIsNotSelected()
         compose.onNodeWithTag("countdown").assert(hasAnyDescendant(hasText("00:12:00")))
         compose.runOnIdle { clock.value = start.plusSeconds(719) }
         compose.onNodeWithTag("countdown").assert(hasAnyDescendant(hasText("00:00:01")))
         compose.runOnIdle { clock.value = start.plusSeconds(720) }
         compose.onNodeWithTag("iqamah-arrival").assertIsDisplayed()
+        compose.onNodeWithTag("row-ASR").assertIsSelected()
         compose.runOnIdle { clock.value = start.plusSeconds(780) }
         compose.onNodeWithTag("iqamah-arrival").assertDoesNotExist()
         compose.onNodeWithText("До икамата · ТЕСТ").assertDoesNotExist()
+        compose.onNodeWithTag("row-ASR").assertIsNotSelected()
+        compose.onNodeWithTag("row-MAGHRIB").assertIsSelected()
     }
     @Test fun editingAndDeletingExceptionKeepsSeasonalRule() {
         val regular = IqamahRule(IqamahPrayer.ASR, date, mode = IqamahMode.FIXED, value = 900)
@@ -221,6 +226,81 @@ class IqamahUiTest {
         compose.onNodeWithTag("iqamah-save").assertIsEnabled()
         assertFalse(state.value.config.enabled)
     }
+    @Test fun conflictingDraftCannotBeSavedByTouchOrRemoteButDisablingRemainsPossible() {
+        val from = Instant.now().atZone(MoscowZone).toLocalDate()
+        val rules = listOf(IqamahRule(IqamahPrayer.DHUHR, from, mode = IqamahMode.FIXED, value = 950), IqamahRule(IqamahPrayer.ASR, from, mode = IqamahMode.FIXED, value = 930))
+        show(IqamahConfig(enabled = true, source = "TEST", rules = rules))
+        tap("Затемнение: выключено")
+        number("1") // Make the draft dirty without changing the conflicting times.
+        compose.onNodeWithTag("iqamah-save").performClick()
+        compose.onNodeWithText("Подтвердить сохранение").assertIsNotEnabled()
+        key(Key.DirectionDown); key(Key.Enter)
+        assertNull(saved)
+        compose.onAllNodesWithText("Конфликт икаматов").onFirst().performScrollTo().assertIsDisplayed()
+        image("conflict-save-blocked")
+        tap("Вернуться к черновику")
+        tap("Функция икамата")
+        compose.onNodeWithTag("iqamah-save").performClick()
+        compose.onNodeWithText("Подтвердить сохранение").assertIsEnabled().performClick()
+        assertFalse(saved!!.enabled)
+        assertEquals(listOf(950, 930), saved!!.rules.map { it.value })
+    }
+    @Test fun midnightArrivalUsesExplicitPreviousDayRowAndReturnsToToday() {
+        val current = date.plusDays(1)
+        val target = date.atTime(23, 59).atZone(MoscowZone).toInstant()
+        val event = IqamahEvent(IqamahPrayer.ISHA, target, null, IqamahRule(IqamahPrayer.ISHA, date, mode = IqamahMode.FIXED, value = 1439), true)
+        val status = mutableStateOf<IqamahStatus>(IqamahStatus.Now(event, target.plusSeconds(300), false))
+        val now = mutableStateOf(target.plusSeconds(120))
+        val next = NextPrayer(dev.nurislam.tv.model.ScheduleEvent.FAJR_IN_MOSQUE, current.atTime(5, 30).atZone(MoscowZone).toInstant())
+        compose.activity.setContent { NurIslamTheme { PrayerBoardScreen(now.value, now, calendar.day(current), next, false, false, iqamah = status.value) } }
+        compose.onNodeWithTag("row-ISHA-iqamah").assertIsSelected().assert(hasAnyDescendant(hasText(date.toString())))
+        compose.onNodeWithTag("row-ISHA").assertIsNotSelected().assert(hasAnyDescendant(hasText("19:02")))
+        compose.runOnIdle { status.value = IqamahStatus.Idle(null, "") }
+        compose.onNodeWithTag("row-ISHA-iqamah").assertDoesNotExist()
+        compose.onNodeWithTag("row-FAJR_IN_MOSQUE").assertIsSelected()
+    }
+    @Test fun actualFridayJumuahReturnsHighlightToAsrAfterArrival() {
+        val friday = date.minusDays(1)
+        val at = friday.atTime(13, 0).atZone(MoscowZone).toInstant()
+        val config = IqamahConfig(enabled = true, source = "TEST", rules = listOf(IqamahRule(IqamahPrayer.JUMUAH, friday, mode = IqamahMode.FIXED, value = 780)))
+        val now = mutableStateOf(at)
+        compose.activity.setContent { NurIslamTheme {
+            val next = (prayerStatus(now.value, schedules) as? PrayerStatus.Upcoming)?.prayer
+            PrayerBoardScreen(now.value, now, calendar.day(friday), next, false, false, iqamah = iqamahStatus(now.value, config, schedules, true))
+        } }
+        compose.onNodeWithTag("row-JUMUAH").assertIsSelected().assert(hasAnyDescendant(hasText("13:00")))
+        compose.onNodeWithTag("row-DHUHR").assertIsNotSelected().assert(hasAnyDescendant(hasText("12:05")))
+        compose.onNodeWithTag("row-ASR").assertIsNotSelected()
+        compose.runOnIdle { now.value = at.plusSeconds(60) }
+        compose.onNodeWithTag("row-JUMUAH").assertDoesNotExist()
+        compose.onNodeWithTag("row-ASR").assertIsSelected()
+    }
+    @Test fun actualConflictBoardCanBeSafelyDisabledUsingOnlyDpad() {
+        if (!BuildConfig.PHONE_PREVIEW) compose.onNodeWithText("Пропустить и открыть табло").performClick()
+        val app = compose.activity.application as NurIslamApplication
+        compose.waitUntil(10_000) { app.iqamah.state.value.loaded }
+        val today = Instant.now().atZone(MoscowZone).toLocalDate()
+        // Synthetic fixture labels exercise Release's approved-source branch only.
+        val calendar = ScheduleJson.parse(ScheduleFixtures.json(today.year, meaning = "PRAYER_START").apply { addProperty("source", "Fixture protocol 42") }.toString().toByteArray())
+        val bad = IqamahConfig(true, true, "Fixture protocol 42", rules = listOf(
+            IqamahRule(IqamahPrayer.DHUHR, today, mode = IqamahMode.FIXED, value = 950),
+            IqamahRule(IqamahPrayer.ASR, today, mode = IqamahMode.FIXED, value = 930)))
+        kotlinx.coroutines.runBlocking { app.schedules.apply(calendar); app.iqamah.save(bad) }
+        compose.onNodeWithTag("iqamah-conflict").assertIsDisplayed()
+        key(Key.Menu)
+        if (!BuildConfig.PHONE_PREVIEW) { key(Key.DirectionDown); key(Key.Enter) }
+        key(Key.DirectionDown, if (BuildConfig.PHONE_PREVIEW) 9 else 10); key(Key.Enter)
+        compose.onNodeWithText("Функция икамата").assertIsOn()
+        key(Key.Enter) // Disable without silently rewriting either time.
+        key(Key.DirectionUp); key(Key.Enter) // Save footer.
+        key(Key.DirectionDown); key(Key.Enter) // Confirm.
+        compose.waitUntil(10_000) { !androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java].busy.value }
+        compose.onNodeWithText("Правила сохранены").assertIsDisplayed()
+        key(Key.Enter) // Return to board (first enabled action).
+        compose.onNodeWithTag("iqamah-conflict").assertDoesNotExist()
+        assertFalse(app.iqamah.state.value.config.enabled)
+        assertEquals(listOf(950, 930), app.iqamah.state.value.config.rules.map { it.value })
+    }
     @Test @Config(sdk = [35], qualifiers = "w800dp-h360dp-xhdpi")
     fun longSourceAndLandscapeKeepSaveAndCancelVisible() {
         show(IqamahConfig(source = "Протокол ".repeat(20)))
@@ -232,13 +312,14 @@ class IqamahUiTest {
     }
     @Test @Config(sdk = [35], qualifiers = "w960dp-h540dp-xhdpi")
     fun countdownArrivalAndDimFitBothThemesAllModesAndScales() {
-        val target = date.atTime(15, 27).atZone(MoscowZone).toInstant()
+        val boardDate = date.minusDays(1) // Friday, including the explicit Jumuah row.
+        val target = boardDate.atTime(15, 27).atZone(MoscowZone).toInstant()
         val settings = mutableStateOf(AppSettings())
-        val status = mutableStateOf<IqamahStatus>(IqamahStatus.Waiting(IqamahEvent(IqamahPrayer.ASR, target, target.minusSeconds(720), IqamahRule(IqamahPrayer.ASR, date, mode = IqamahMode.OFFSET, value = 12, baseCalendar = calendarFingerprint(calendar.json)), true)))
+        val status = mutableStateOf<IqamahStatus>(IqamahStatus.Waiting(IqamahEvent(IqamahPrayer.ASR, target, target.minusSeconds(720), IqamahRule(IqamahPrayer.ASR, boardDate, mode = IqamahMode.OFFSET, value = 12, baseCalendar = calendarFingerprint(calendar.json)), true)))
         val clock = mutableStateOf(target.minusSeconds(70))
         compose.activity.setContent { NurIslamTheme(settings.value.theme) { CompositionLocalProvider(LocalBoardSettings provides settings.value) {
             RotatedBoard(settings.value.displayMode, Modifier.fillMaxSize()) {
-                PrayerBoardScreen(clock.value, clock, calendar.day(date), null, settings.value.displayMode == DisplayMode.LANDSCAPE, false, iqamah = status.value)
+                PrayerBoardScreen(clock.value, clock, calendar.day(boardDate), null, settings.value.displayMode == DisplayMode.LANDSCAPE, false, iqamah = status.value)
             }
         } } }
         for (theme in BoardThemeId.entries) for (mode in listOf(DisplayMode.LANDSCAPE, DisplayMode.PORTRAIT_NATIVE, DisplayMode.PORTRAIT_ROTATE_CW, DisplayMode.PORTRAIT_ROTATE_CCW)) for (scale in listOf(.85f, 1f, 1.15f)) {
@@ -246,15 +327,30 @@ class IqamahUiTest {
             compose.onNodeWithTag("iqamah-time").assertIsDisplayed().assert(hasAnyDescendant(hasText("15:27")))
             compose.onNodeWithTag("countdown").assertIsDisplayed().assert(hasAnyDescendant(hasText("00:01:10")))
             compose.onNodeWithTag("row-ISHA").assertIsDisplayed()
+            compose.onNodeWithTag("row-ASR").assertIsSelected()
             noTextOverflow()
             if (scale == 1f) image("${theme.name.lowercase()}-${mode.name.lowercase()}-waiting")
             val event = (status.value as IqamahStatus.Waiting).event
             compose.runOnIdle { status.value = IqamahStatus.Now(event, target.plusSeconds(60), false) }
             compose.onNodeWithTag("iqamah-arrival").assertIsDisplayed()
+            compose.onNodeWithTag("row-ASR").assertIsSelected()
             noTextOverflow()
             compose.runOnIdle { status.value = IqamahStatus.Now(event, target.plusSeconds(300), true) }
             compose.onNodeWithTag("iqamah-dim").assertIsDisplayed()
             noTextOverflow()
+            val jumuah = event.copy(prayer = IqamahPrayer.JUMUAH, start = null)
+            compose.runOnIdle { status.value = IqamahStatus.Now(jumuah, target.plusSeconds(60), false) }
+            compose.onNodeWithTag("row-JUMUAH").assertIsDisplayed().assertIsSelected()
+            compose.onNodeWithTag("row-JUMUAH").assert(hasAnyDescendant(hasText("Джума (пятница) · Икамат")))
+            compose.onNodeWithTag("row-DHUHR").assertIsNotSelected().assert(hasAnyDescendant(hasText("12:05")))
+            noTextOverflow()
+            if (scale == 1f && mode == DisplayMode.LANDSCAPE) image("${theme.name.lowercase()}-jumuah")
+            compose.runOnIdle { status.value = IqamahStatus.Conflict("Конфликт икаматов. Зухр 2026-10-24 15:30 / Аср 2026-10-24 15:20. Икамат на дату приостановлен; исправьте правила в настройках.") }
+            compose.onNodeWithTag("iqamah-conflict").assertIsDisplayed()
+            compose.onNodeWithTag("row-ASR").assertIsNotSelected()
+            compose.onNodeWithTag("row-JUMUAH").assertDoesNotExist()
+            noTextOverflow()
+            if (scale == 1f && mode == DisplayMode.LANDSCAPE) image("${theme.name.lowercase()}-conflict")
             compose.runOnIdle { status.value = IqamahStatus.Waiting(event) }
         }
         val event = (status.value as IqamahStatus.Waiting).event

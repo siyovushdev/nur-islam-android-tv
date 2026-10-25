@@ -188,12 +188,19 @@ try:
     assert remaining > 0, "Fixture time elapsed before restart checks; timing budget needs adjustment"
     time.sleep(remaining + 2)
     screen_with("Икамат")
+    arrival_xml = (output / "screen.xml").read_text()
+    selected = [node for node in ET.fromstring(arrival_xml).iter("node") if node.get("selected") == "true"]
+    assert len(selected) == 1, "Active iqamah must select exactly one schedule row"
+    assert any(n.get("text") == "15:15" for n in selected[0].iter("node")), "Arrival must highlight Asr's original JSON row"
     screenshot("iqamah-arrival")
     time.sleep(60)
     # The arrival must finish instead of looping indefinitely.
     run("shell", "uiautomator", "dump", "/sdcard/nur-phone-smoke.xml")
     final_xml = run("exec-out", "cat", "/sdcard/nur-phone-smoke.xml")
     assert 'text="Икамат"' not in final_xml, "Arrival did not end"
+    # The underlying next prayer may be tomorrow; Asr must not remain selected.
+    selected = [node for node in ET.fromstring(final_xml).iter("node") if node.get("selected") == "true"]
+    assert not any(n.get("text") == "15:15" for node in selected for n in node.iter("node")), "Asr highlight was not released"
     screenshot("iqamah-finished")
     (output / "result.txt").write_text("PASS: signed APK install, LAUNCHER, no HOME entry point, touch settings/theme/scale, cold process restart; unapproved test-source block/cancel; approved phone-test acknowledge/apply/result/board; persistent banner; iqamah default-off, explicit touch entry/save/confirmation, process restart, real-time arrival and automatic exit; no system settings changed\n")
 finally:

@@ -30,4 +30,19 @@ class PrayerStatusTest {
         assertFalse(gesture.click(600)); assertFalse(gesture.click(6000))
         repeat(3) { assertFalse(gesture.click(6100 + it * 100L)) }; assertTrue(gesture.click(6500))
     }
+    @Test fun october25UnconfirmedFajrStillWaitsUntilSunrise() {
+        val json = ScheduleFixtures.json().apply {
+            getAsJsonArray("days").forEach { element -> element.asJsonObject.apply {
+                addProperty("suhurEnd", "05:00"); addProperty("fajrInMosque", "05:25")
+                addProperty("sunrise", "06:35"); addProperty("zawal", "11:40")
+                addProperty("dhuhr", "12:00"); addProperty("asr", "15:10")
+            } }
+        }
+        val calendar = dev.nurislam.tv.data.ScheduleJson.parse(json.toString().toByteArray())
+        fun at(time: String) = java.time.LocalDate.of(2026, 10, 25).atTime(java.time.LocalTime.parse(time)).atZone(MoscowZone).toInstant()
+        assertTrue(prayerStatus(at("06:29"), calendar) is PrayerStatus.FajrUnconfirmed)
+        for (time in listOf("06:35", "06:36", "11:59")) assertEquals(ScheduleEvent.DHUHR, (prayerStatus(at(time), calendar) as PrayerStatus.Upcoming).prayer.event)
+        assertEquals(ScheduleEvent.ASR, (prayerStatus(at("12:00"), calendar) as PrayerStatus.Upcoming).prayer.event)
+    }
+
 }

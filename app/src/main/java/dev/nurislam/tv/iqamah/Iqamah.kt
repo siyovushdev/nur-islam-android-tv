@@ -59,13 +59,13 @@ sealed interface IqamahStatus {
     data class Waiting(val event: IqamahEvent) : IqamahStatus
     data class Now(val event: IqamahEvent, val until: Instant, val dim: Boolean) : IqamahStatus
     data class Idle(val upcoming: IqamahEvent?, val detail: String) : IqamahStatus
+    data class Conflict(val detail: String) : IqamahStatus
 }
 
 /** Never interprets a raw column as a start without confirmation bound to this exact calendar. */
-fun iqamahDay(date: LocalDate, config: IqamahConfig, calendars: ScheduleState): List<IqamahDayRow> {
+private fun rawIqamahDay(date: LocalDate, config: IqamahConfig, calendars: ScheduleState, fingerprint: String?): List<IqamahDayRow> {
     val calendar = calendars.scheduleFor(date)
     val day = calendar?.day(date)
-    val fingerprint = calendar?.let { calendarFingerprint(it.json) }
     return prayersOn(date).map { prayer ->
         val rule = config.rule(prayer, date)
         val provenance = rule?.let { if (it.exception) "Исключение $date" else "С ${it.from}" } ?: "Нет правила"
@@ -86,6 +86,56 @@ fun iqamahDay(date: LocalDate, config: IqamahConfig, calendars: ScheduleState): 
     }
 }
 
+/** Canonical prayer order is independent of the entered iqamah times. */
+data class IqamahConflict(val earlier: IqamahEvent, val later: IqamahEvent, val reason: String) {
+    val dates: Set<LocalDate> get() = setOf(earlier.at.atZone(MoscowZone).toLocalDate(), later.at.atZone(MoscowZone).toLocalDate())
+    val detail: String get() = "$reason: ${earlier.prayer.title} ${earlier.at.atZone(MoscowZone).toLocalDate()} ${earlier.at.atZone(MoscowZone).toLocalTime()} / ${later.prayer.title} ${later.at.atZone(MoscowZone).toLocalDate()} ${later.at.atZone(MoscowZone).toLocalTime()}"
+}
+
+private fun evaluatedDays(dates: List<LocalDate>, config: IqamahConfig, calendars: ScheduleState): Pair<Map<LocalDate, List<IqamahDayRow>>, List<IqamahConflict>> {
+    // A year preview hashes each calendar once, rather than once per prayer/date.
+    val fingerprints = mutableMapOf<Int, String>()
+    val rows = dates.distinct().sorted().associateWith { date ->
+        val calendar = calendars.scheduleFor(date)
+        val fingerprint = calendar?.let { fingerprints.getOrPut(it.metadata.year) { calendarFingerprint(it.json) } }
+        rawIqamahDay(date, config, calendars, fingerprint)
+    }
+    val events = rows.values.flatten().mapNotNull { it.event }.sortedWith(compareBy(
+        { it.at.atZone(MoscowZone).toLocalDate() }, { it.prayer.event.ordinal }))
+    val duration = if (config.dimMinutes == 0) 60L else config.dimMinutes * 60L
+    val conflicts = mutableListOf<IqamahConflict>()
+    events.forEachIndexed { index, earlier ->
+        val nextDate = earlier.at.atZone(MoscowZone).toLocalDate().plusDays(1)
+        for (later in events.subList(index + 1, events.size)) {
+            if (later.at.atZone(MoscowZone).toLocalDate() > nextDate) break
+            val reason = when {
+                earlier.at >= later.at -> "Нарушен порядок икаматов"
+                earlier.at.plusSeconds(duration) > (later.start ?: later.at) -> "Пересекаются ожидание или индикация икаматов"
+                else -> null
+            }
+            if (reason != null) conflicts += IqamahConflict(earlier, later, reason)
+        }
+    }
+    return rows to conflicts
+}
+
+private fun dateWindow(date: LocalDate) = (-1L..1L).map(date::plusDays)
+
+fun iqamahDay(date: LocalDate, config: IqamahConfig, calendars: ScheduleState): List<IqamahDayRow> {
+    val (rows, conflicts) = evaluatedDays(dateWindow(date), config, calendars)
+    val problem = conflicts.firstOrNull { date in it.dates } ?: return rows.getValue(date)
+    return rows.getValue(date).map { row ->
+        if (row.event == null) row else row.copy(event = null, detail = "Икамат на дату приостановлен. ${problem.detail}. Исправьте правила.")
+    }
+}
+
+/** Save-time validation covers every date available in the current/preceding calendar. */
+fun iqamahConflicts(config: IqamahConfig, calendars: ScheduleState): List<IqamahConflict> {
+    val dates = listOfNotNull(calendars.current, calendars.previous).flatMap { it.days.keys }
+        .distinct().filter { calendars.scheduleFor(it) != null }
+    return evaluatedDays(dates, config, calendars).second
+}
+
 fun iqamahCompatibilityWarning(date: LocalDate, config: IqamahConfig, calendars: ScheduleState): String? {
     val calendar = calendars.scheduleFor(date) ?: return null
     val fingerprint = calendarFingerprint(calendar.json)
@@ -101,7 +151,13 @@ fun iqamahStatus(now: Instant, config: IqamahConfig, calendars: ScheduleState, a
     if (!config.approved && !allowDemo) return IqamahStatus.Idle(null, "Правила икамата не утверждены мечетью")
     if (calendars.scheduleFor(date)?.day(date) == null) return IqamahStatus.Idle(null, "Икамат: нет календаря на дату")
     if (!allowDemo && isTestSource(calendars.scheduleFor(date)!!.metadata.source)) return IqamahStatus.Idle(null, "Тестовый календарь: икамат недоступен в Release")
-    val rows = (-1L..1L).flatMap { iqamahDay(date.plusDays(it), config, calendars) }
+    val (days, conflicts) = evaluatedDays(dateWindow(date), config, calendars)
+    conflicts.firstOrNull { date in it.dates }?.let {
+        return IqamahStatus.Conflict("Конфликт икаматов. ${it.detail}. Икамат на дату приостановлен; исправьте правила в настройках.")
+    }
+    // Do not reintroduce an adjacent day's blocked event through the 3-day window.
+    val blockedDates = conflicts.flatMap { it.dates }.toSet()
+    val rows = days.filterKeys { it !in blockedDates }.values.flatten()
     val events = rows.mapNotNull { it.event }.filter { allowDemo || !it.demo }.sortedBy { it.at }
     val duration = if (config.dimMinutes == 0) 60L else config.dimMinutes * 60L
     events.lastOrNull { now >= it.at && now < it.at.plusSeconds(duration) }?.let {

@@ -132,4 +132,65 @@ class IqamahTest {
         guard.confirm(start.plusSeconds(7201), 3_603_000); assertFalse(guard.problem)
         guard.sample(start.minusSeconds(60), 3_604_000); assertTrue(guard.problem)
     }
+    @Test fun reversedAndEqualIqamahNeverReturnToEarlierPrayer() {
+        for (asr in listOf(15 * 60 + 20, 15 * 60 + 30)) {
+            val c = config(rule(IqamahPrayer.DHUHR, IqamahMode.FIXED, 930), rule(IqamahPrayer.ASR, IqamahMode.FIXED, asr))
+            val before = IqamahJson.encode(c).toString()
+            for (time in listOf("12:00", "15:15", "15:20", "15:21", "15:30", "15:31")) {
+                val status = iqamahStatus(at(time), c, schedules, false) as IqamahStatus.Conflict
+                assertTrue(status.detail.contains("Зухр")); assertTrue(status.detail.contains("Аср"))
+                assertTrue(status.detail.contains("15:30"))
+            }
+            assertTrue(iqamahDay(date, c, schedules).all { it.event == null })
+            assertEquals(before, IqamahJson.encode(c).toString()) // No correction of entered times.
+        }
+    }
+    @Test fun orderedTimesWithOverlappingWaitOrDimAreAlsoConflicts() {
+        val waiting = config(rule(IqamahPrayer.DHUHR, IqamahMode.FIXED, 920), rule(IqamahPrayer.ASR, IqamahMode.FIXED, 930))
+        assertTrue(iqamahStatus(at("15:21"), waiting, schedules, false) is IqamahStatus.Conflict)
+        val dim = config(rule(IqamahPrayer.DHUHR, IqamahMode.FIXED, 910, bound = false), rule(IqamahPrayer.ASR, IqamahMode.FIXED, 912, bound = false), dim = 5)
+        assertTrue(iqamahStatus(at("15:15"), dim, schedules, false) is IqamahStatus.Conflict)
+        assertTrue(iqamahConflicts(dim, schedules).first().detail.contains("Пересекаются"))
+    }
+    @Test fun touchingHalfOpenWindowsAdvanceNormallyAndOffRulesDoNotConflict() {
+        val c = config(rule(IqamahPrayer.DHUHR, IqamahMode.FIXED, 914), rule(IqamahPrayer.ASR))
+        assertTrue(iqamahConflicts(c, schedules).isEmpty())
+        assertEquals(IqamahPrayer.DHUHR, (iqamahStatus(at("15:14:59"), c, schedules, false) as IqamahStatus.Now).event.prayer)
+        assertEquals(IqamahPrayer.ASR, (iqamahStatus(at("15:15"), c, schedules, false) as IqamahStatus.Waiting).event.prayer)
+        val off = config(rule(IqamahPrayer.DHUHR, IqamahMode.OFF), rule(IqamahPrayer.ASR))
+        assertTrue(iqamahConflicts(off, schedules).isEmpty())
+    }
+    @Test fun conflictChecksRespectExceptionsFridayAndMidnight() {
+        val first = rule(IqamahPrayer.DHUHR, IqamahMode.FIXED, 735, day = date.minusDays(1))
+        val asr = rule(IqamahPrayer.ASR, IqamahMode.FIXED, 930, day = date.minusDays(1))
+        val exception = first.copy(from = date, exception = true, value = 950)
+        val c = config(first, asr, exception)
+        assertTrue(iqamahStatus(at("15:20"), c, schedules, false) is IqamahStatus.Conflict)
+        assertFalse(iqamahStatus(at("15:20", date.plusDays(1)), c, schedules, false) is IqamahStatus.Conflict)
+        val friday = date.minusDays(1)
+        val j = rule(IqamahPrayer.JUMUAH, IqamahMode.FIXED, 780, friday, false)
+        assertTrue(iqamahStatus(at("13:00", friday), config(first, asr, j), schedules, false) is IqamahStatus.Now)
+        val badJ = j.copy(value = 960)
+        assertTrue(iqamahStatus(at("15:31", friday), config(first, asr, badJ), schedules, false) is IqamahStatus.Conflict)
+        val crossing = config(rule(IqamahPrayer.ISHA, IqamahMode.FIXED, 1439, bound = false), rule(IqamahPrayer.FAJR, IqamahMode.FIXED, 2, bound = false), dim = 5)
+        assertTrue(iqamahStatus(at("23:59"), crossing, schedules, false) is IqamahStatus.Conflict)
+        assertTrue(iqamahStatus(at("00:03", date.plusDays(1)), crossing, schedules, false) is IqamahStatus.Conflict)
+        val nextYear = calendar(2027)
+        val years = ScheduleState(nextYear, calendar, true)
+        val end = LocalDate.of(2026, 12, 31)
+        assertTrue(iqamahStatus(at("00:03", end.plusDays(1)), crossing, years, false) is IqamahStatus.Conflict)
+    }
+    @Test fun fullCalendarValidationFindsFutureExceptionAndLeavesFajrUnconfirmedAlone() {
+        val future = date.plusDays(10)
+        val c = config(rule(IqamahPrayer.DHUHR, IqamahMode.FIXED, 735), rule(IqamahPrayer.ASR), rule(IqamahPrayer.DHUHR, IqamahMode.FIXED, 950, future, exception = true))
+        val conflicts = iqamahConflicts(c, schedules)
+        assertTrue(conflicts.any { future in it.dates })
+        assertFalse(iqamahStatus(at("12:10"), c, schedules, false) is IqamahStatus.Conflict)
+        val unknown = calendar(meaning = null)
+        val unknownState = ScheduleState(unknown, loaded = true)
+        val blocked = config(rule(IqamahPrayer.FAJR).copy(baseCalendar = calendarFingerprint(unknown.json)))
+        assertTrue(iqamahConflicts(blocked, unknownState).isEmpty())
+        assertNull(iqamahDay(date, blocked, unknownState).first().event)
+    }
+
 }

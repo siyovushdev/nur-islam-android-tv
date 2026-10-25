@@ -96,6 +96,8 @@ fun IqamahPanel(state: IqamahState, schedules: ScheduleState, busy: Boolean, mes
         base = r?.baseCalendar != null && r.baseCalendar == schedules.scheduleFor(LocalDate.parse(date))?.let { calendarFingerprint(it.json) }
         page = "rule"
     }
+    val conflicts = if (page == "confirm") remember(draft, schedules) { iqamahConflicts(draft, schedules) } else emptyList()
+    val canSave = !draft.enabled || conflicts.isEmpty()
     val entries = when {
         error != null -> listOf(IqaAction("Понятно", error!!) { error = null })
         message != null -> listOf(IqaAction("Понятно", message) { onDismissMessage(); savedPending = null; rollbackPending = false })
@@ -103,8 +105,9 @@ fun IqamahPanel(state: IqamahState, schedules: ScheduleState, busy: Boolean, mes
         page == "discard" -> listOf(IqaAction("Продолжить редактирование") { page = "main" }, IqaAction("Отменить изменения и выйти") { onClose() })
         page == "confirm" -> listOf(
             IqaAction("Вернуться к черновику") { page = "main" },
-            IqaAction("Подтвердить сохранение", "${if (draft.approved) "Правила отмечены администратором как утверждённые: ${draft.source}" else "ТЕСТОВЫЕ ПРАВИЛА — не утверждены мечетью"}. Записей: ${draft.rules.size}. Затемнение: ${draft.dimMinutes} мин. Время JSON не меняется.", !busy && state.loaded) { savedPending = draft; onSave(draft) },
-        )
+            IqaAction("Подтвердить сохранение", "${if (draft.approved) "Правила отмечены администратором как утверждённые: ${draft.source}" else "ТЕСТОВЫЕ ПРАВИЛА — не утверждены мечетью"}. Записей: ${draft.rules.size}. Затемнение: ${draft.dimMinutes} мин. Время JSON не меняется.${if (!canSave) " Сохранение включённой функции заблокировано: исправьте конфликты либо выключите икамат." else ""}", !busy && state.loaded && canSave) { savedPending = draft; onSave(draft) },
+        ) + conflicts.take(5).map { conflict -> IqaAction("Конфликт икаматов", conflict.detail, false, informational = true) {} } +
+            if (conflicts.size > 5) listOf(IqaAction("Ещё конфликтов: ${conflicts.size - 5}", "Проверьте даты изменений и исключения", false, informational = true) {}) else emptyList()
         page == "rule" -> listOf(
             IqaAction("Дата: $date", "Действует с этой даты до следующей записи; исключение — только на выбранный день") { number = "date" },
             IqaAction("Разовое исключение", checked = exception) { exception = !exception },
