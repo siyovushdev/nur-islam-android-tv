@@ -129,11 +129,11 @@ fun iqamahDay(date: LocalDate, config: IqamahConfig, calendars: ScheduleState): 
     }
 }
 
-/** Save-time validation covers every date available in the current/preceding calendar. */
-fun iqamahConflicts(config: IqamahConfig, calendars: ScheduleState): List<IqamahConflict> {
+/** Validate available dates; save-time callers exclude expired conflicts, preserving rule history. */
+fun iqamahConflicts(config: IqamahConfig, calendars: ScheduleState, from: LocalDate? = null): List<IqamahConflict> {
     val dates = listOfNotNull(calendars.current, calendars.previous).flatMap { it.days.keys }
         .distinct().filter { calendars.scheduleFor(it) != null }
-    return evaluatedDays(dates, config, calendars).second
+    return evaluatedDays(dates, config, calendars).second.filter { conflict -> from == null || conflict.dates.any { it >= from } }
 }
 
 fun iqamahCompatibilityWarning(date: LocalDate, config: IqamahConfig, calendars: ScheduleState): String? {

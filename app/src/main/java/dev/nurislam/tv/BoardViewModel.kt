@@ -29,7 +29,7 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
     fun sampleClock(now: java.time.Instant, elapsed: Long) { clockGuard.sample(now, elapsed); mutableClockProblem.value = clockGuard.problem }
     fun confirmClock(now: java.time.Instant, elapsed: Long) { clockGuard.confirm(now, elapsed); mutableClockProblem.value = false }
     fun saveIqamah(config: dev.nurislam.tv.iqamah.IqamahConfig) = operation {
-        val conflict = if (config.enabled) dev.nurislam.tv.iqamah.iqamahConflicts(config, schedules.value).firstOrNull() else null
+        val conflict = if (config.enabled) dev.nurislam.tv.iqamah.iqamahConflicts(config, schedules.value, java.time.Instant.now().atZone(dev.nurislam.tv.model.MoscowZone).toLocalDate()).firstOrNull() else null
         require(conflict == null) { "Конфликт икаматов: ${conflict?.detail}. Исправьте правила либо выключите функцию." }
         app.iqamah.save(config)
     }

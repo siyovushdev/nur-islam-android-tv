@@ -193,4 +193,16 @@ class IqamahTest {
         assertNull(iqamahDay(date, blocked, unknownState).first().event)
     }
 
+    @Test fun effectiveDateRepairPreservesHistoryAndOnlyFutureConflictsBlockSaving() {
+        val bad = config(rule(IqamahPrayer.DHUHR, IqamahMode.FIXED, 950), rule(IqamahPrayer.ASR, IqamahMode.FIXED, 930))
+        val tomorrow = date.plusDays(1)
+        val repaired = bad.copy(rules = bad.rules + rule(IqamahPrayer.DHUHR, IqamahMode.FIXED, 735, tomorrow))
+        assertTrue(iqamahConflicts(repaired, schedules).any { date in it.dates })
+        assertTrue(iqamahConflicts(repaired, schedules, tomorrow).isEmpty())
+        assertEquals(950, repaired.rule(IqamahPrayer.DHUHR, date)!!.value)
+        assertEquals(735, repaired.rule(IqamahPrayer.DHUHR, tomorrow)!!.value)
+        assertTrue(iqamahStatus(at("15:21"), repaired, schedules, false) is IqamahStatus.Conflict)
+        assertFalse(iqamahStatus(at("15:21", tomorrow), repaired, schedules, false) is IqamahStatus.Conflict)
+    }
+
 }

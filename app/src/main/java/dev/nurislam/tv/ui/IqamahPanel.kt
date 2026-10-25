@@ -96,7 +96,8 @@ fun IqamahPanel(state: IqamahState, schedules: ScheduleState, busy: Boolean, mes
         base = r?.baseCalendar != null && r.baseCalendar == schedules.scheduleFor(LocalDate.parse(date))?.let { calendarFingerprint(it.json) }
         page = "rule"
     }
-    val conflicts = if (page == "confirm") remember(draft, schedules) { iqamahConflicts(draft, schedules) } else emptyList()
+    val today = Instant.now().atZone(MoscowZone).toLocalDate()
+    val conflicts = if (page == "confirm") remember(draft, schedules, today) { iqamahConflicts(draft, schedules, today) } else emptyList()
     val canSave = !draft.enabled || conflicts.isEmpty()
     val entries = when {
         error != null -> listOf(IqaAction("Понятно", error!!) { error = null })
