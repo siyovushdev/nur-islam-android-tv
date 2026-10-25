@@ -32,10 +32,18 @@ def run(*command):
 def screen_with(label, control=False, timeout=30, ignore_case=False):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        run("shell", "uiautomator", "dump", "/sdcard/nur-phone-smoke.xml")
+        dump = run("shell", "uiautomator", "dump", "/sdcard/nur-phone-smoke.xml")
         xml = run("exec-out", "cat", "/sdcard/nur-phone-smoke.xml")
         (output / "screen.xml").write_text(xml)
-        root = ET.fromstring(xml)
+        try:
+            root = ET.fromstring(xml)
+        except ET.ParseError:
+            # UIAutomation can return "null root" while the first window attaches.
+            # Keep diagnostics, retry only within this label's bounded deadline.
+            with (output / "uiautomator-errors.txt").open("a") as diagnostic:
+                diagnostic.write(dump + "\n" + xml + "\n")
+            time.sleep(1)
+            continue
         for node in root.iter("node"):
             if node.get("text") == label or (ignore_case and node.get("text", "").casefold() == label.casefold()):
                 if not control:
