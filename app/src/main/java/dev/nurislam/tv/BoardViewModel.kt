@@ -54,7 +54,13 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
     private var importJob: Job? = null
     private var readingStream: AtomicReference<InputStream?>? = null
     fun import(uri: Uri) = operation(importing = true) {
-        mutableCandidate.value = readCandidate { app.contentResolver.openInputStream(uri) ?: error("Не удалось открыть файл") }
+        mutableCandidate.value = readCandidate(sourceName = {
+            runCatching {
+                app.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getString(0) else null
+                }
+            }.getOrNull() ?: uri.lastPathSegment
+        }) { app.contentResolver.openInputStream(uri) ?: error("Не удалось открыть файл") }
     }
     fun importInbox() = operation(importing = true) {
         mutableCandidate.value = readCandidate {
@@ -64,7 +70,7 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
             files.single().inputStream()
         }
     }
-    private suspend fun readCandidate(open: () -> InputStream): ValidatedSchedule {
+    private suspend fun readCandidate(sourceName: () -> String? = { null }, open: () -> InputStream): ValidatedSchedule {
         val reference = AtomicReference<InputStream?>(null)
         readingStream = reference
         return try {
@@ -73,7 +79,9 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
                     reference.set(input)
                     currentCoroutineContext().ensureActive()
                     val context = currentCoroutineContext()
-                    ScheduleImport.parse(input.readBytesBounded(ScheduleXlsx.MAX_BYTES), BuildConfig.PHONE_PREVIEW) { context.ensureActive() }
+                    val name = sourceName()?.take(1024)
+                    context.ensureActive()
+                    ScheduleImport.parse(input.readBytesBounded(ScheduleXlsx.MAX_BYTES), BuildConfig.PHONE_PREVIEW, sourceName = name) { context.ensureActive() }
                 }
             }
         } finally { if (readingStream === reference) readingStream = null }
@@ -95,6 +103,7 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
             require(excelConfirmed) { "Сначала подтвердите источник Excel в предпросмотре" }
             ScheduleImport.confirmExcel(draft)
         } else draft
+        require(BuildConfig.PHONE_PREVIEW || !isTestSource(parsed.metadata.source)) { "Тестовый источник нельзя применить в TV-сборке для работы мечети" }
         app.schedules.apply(parsed)
         mutableCandidate.value = null
         mutableAppliedSchedule.value = parsed

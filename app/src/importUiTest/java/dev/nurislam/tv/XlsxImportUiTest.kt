@@ -82,6 +82,16 @@ class XlsxImportUiTest {
         compose.onNodeWithText("Папка недоступна:", substring = true).assertExists()
         key(Key.DirectionDown); key(Key.Enter); assertTrue(reselected)
     }
+    @Test fun explicitlyTestNamedExcelCannotBecomeOfficialInTvButPhoneCanAcknowledgeDemo() {
+        val candidate = ScheduleImport.parse(ScheduleXlsxTest.source(), sourceName = "ТЕСТ ДЛЯ ТЕЛЕФОНА.xlsx")
+        var applied = false
+        assertTrue(isTestSource(candidate.metadata.source)); assertFalse(candidate.metadata.approved)
+        compose.activity.setContent { NurIslamTheme { ScheduleImportPreview(candidate, ScheduleState(), false, BuildConfig.PHONE_PREVIEW, { applied = true }, {}) } }
+        compose.onNodeWithTag("import-apply").assertIsNotEnabled()
+        key(Key.DirectionDown); key(Key.Enter); key(Key.DirectionDown); key(Key.Enter)
+        assertEquals(BuildConfig.PHONE_PREVIEW, applied)
+        if (!BuildConfig.PHONE_PREVIEW) compose.onNodeWithTag("import-confirmation").assertIsNotEnabled().assertIsOff()
+    }
     @Test fun invalidSavedFolderUriOffersReselectionWithoutCrashing() {
         var selected = false
         compose.activity.setContent { NurIslamTheme { ImportFolderScreen(Uri.parse("file:///invalid"), BuildConfig.PHONE_PREVIEW, {}, { selected = true }, {}) } }
@@ -113,7 +123,7 @@ class XlsxImportUiTest {
         }
         compose.onNodeWithTag("admin-list").performScrollToNode(hasText("Расписание"))
         compose.onNodeWithText("Расписание").performClick()
-        val file = File(app.cacheDir, "source-test.xlsx").apply { writeBytes(ScheduleXlsxTest.source()) }
+        val file = File(app.cacheDir, "calendar-kazan.xlsx").apply { writeBytes(ScheduleXlsxTest.source()) }
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java]
         compose.runOnIdle { vm.import(Uri.fromFile(file)) }
         compose.waitUntil(15_000) { shadowOf(android.os.Looper.getMainLooper()).idle(); !vm.busy.value }

@@ -34,6 +34,13 @@ class NativeIntegrationTest {
         compose.waitUntil(10_000) { app.schedules.state.value.loaded && app.ramadan.state.value.loaded }
         if (compose.onAllNodesWithText("Пропустить и открыть табло").fetchSemanticsNodes().isNotEmpty()) compose.onNodeWithText("Пропустить и открыть табло").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("prayer-board").fetchSemanticsNodes().isNotEmpty() }
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            val roles = app.getSystemService(android.app.role.RoleManager::class.java)
+            File(app.getExternalFilesDir(null), "qa-home-capability.json").writeText(com.google.gson.JsonObject().apply {
+                addProperty("available", roles?.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME) == true)
+                addProperty("held", roles?.isRoleHeld(android.app.role.RoleManager.ROLE_HOME) == true)
+            }.toString())
+        }
         runBlocking { app.settings.update { it.copy(mosqueName = "ПРОВЕРКА НА ЭМУЛЯТОРЕ") } }
     }
     private fun settings() { key(Key.DirectionCenter, 5); key(Key.DirectionDown); key(Key.Enter); compose.onNodeWithText("Тема:", substring = true).assertExists() }
@@ -47,7 +54,12 @@ class NativeIntegrationTest {
         val assets = InstrumentationRegistry.getInstrumentation().context.assets
         val inbox = File(app.getExternalFilesDir(null), "incoming-schedule.xlsx")
         val json = File(app.getExternalFilesDir(null), "incoming-schedule.json")
-        json.delete(); inbox.writeBytes(assets.open("xlsx/kazan-2026.xlsx").use { it.readBytes() })
+        val bytes = assets.open("xlsx/kazan-2026.xlsx").use { it.readBytes() }
+        var checkpoints = 0
+        assertThrows(java.util.concurrent.CancellationException::class.java) {
+            ScheduleImport.parse(bytes) { if (++checkpoints > 1500) throw java.util.concurrent.CancellationException("native user cancellation") }
+        }
+        json.delete(); inbox.writeBytes(bytes)
         try {
             settings(); key(Key.DirectionDown, 7); key(Key.Enter)
             key(Key.DirectionDown, 2); key(Key.Enter); waitIo()

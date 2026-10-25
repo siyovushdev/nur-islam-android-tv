@@ -118,7 +118,15 @@ try:
     tap("Импорт JSON / XLSX — выбрать файл")
     screen_with("NurIslam")
     screenshot("saf-file-picker")
-    run("shell", "input", "keyevent", "4")
+    # SAF BACK first goes up a directory; leave the provider in a bounded way.
+    for _ in range(3):
+        run("shell", "uiautomator", "dump", "/sdcard/nur-phone-smoke.xml")
+        picker_xml = run("exec-out", "cat", "/sdcard/nur-phone-smoke.xml")
+        picker_nodes = list(ET.fromstring(picker_xml).iter("node"))
+        if any(node.get("package") == package for node in picker_nodes):
+            break
+        assert any("documentsui" in node.get("package", "") for node in picker_nodes), "Unexpected screen while cancelling SAF"
+        run("shell", "input", "keyevent", "4")
     screen_with("Импорт JSON / XLSX — выбрать файл")
     tap("Импорт JSON / XLSX — выбрать файл")
     tap_plain("NurIslam"); tap_plain(filename)

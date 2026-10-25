@@ -54,6 +54,7 @@ class RamadanTest {
         assertEquals(10, (status(LocalDate.of(2026, 12, 31), d) as RamadanStatus.Before).days)
         assertEquals(9, (status(LocalDate.of(2027, 1, 1), d) as RamadanStatus.Before).days)
         assertTrue(status(LocalDate.of(2028, 1, 1), d) is RamadanStatus.Hidden)
+        assertTrue((status(LocalDate.of(2025, 1, 1), d) as RamadanStatus.Hidden).reason.contains("на этот или следующий год"))
         val cross = dates(first = "2026-12-20")
         assertEquals(13, (status(LocalDate.of(2027, 1, 1), cross) as RamadanStatus.Fasting).day)
     }

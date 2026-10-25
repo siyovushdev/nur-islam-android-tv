@@ -214,7 +214,7 @@ object ScheduleXlsx {
         val json = JsonObject().apply {
             addProperty("schemaVersion", 1); addProperty("locationId", "kazan"); addProperty("locationName", "Казань")
             addProperty("timezone", "Europe/Moscow"); addProperty("year", year)
-            addProperty("source", if (phoneDemo) "ТЕСТ: Excel Казань для проверки на телефоне" else "Excel Казань — подтверждение администратора")
+            addProperty("source", if (phoneDemo) "ТЕСТ: Excel Казань — не утверждён мечетью" else "Excel Казань — подтверждение администратора")
             addProperty("revision", "xlsx-sha256:$sha"); addProperty("approved", false)
             addProperty("fajrMeaning", "UNCONFIRMED"); add("days", days)
         }
@@ -250,10 +250,10 @@ object ScheduleXlsx {
 }
 
 object ScheduleImport {
-    fun parse(bytes: ByteArray, phoneDemo: Boolean = false, checkActive: () -> Unit = {}): ValidatedSchedule {
+    fun parse(bytes: ByteArray, phoneDemo: Boolean = false, sourceName: String? = null, checkActive: () -> Unit = {}): ValidatedSchedule {
         checkActive()
         if (bytes.size >= 2 && bytes[0] == 0xd0.toByte() && bytes[1] == 0xcf.toByte()) throw ScheduleFormatException("Старый .xls не поддерживается. Сохраните файл в формате .xlsx.")
-        return if (bytes.size >= 4 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4b.toByte()) ScheduleXlsx.parse(bytes, phoneDemo, checkActive) else ScheduleJson.parse(bytes).also { checkActive() }
+        return if (bytes.size >= 4 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4b.toByte()) ScheduleXlsx.parse(bytes, phoneDemo || (sourceName?.let(::isTestSource) == true), checkActive) else ScheduleJson.parse(bytes).also { checkActive() }
     }
 
     /** Only XLSX drafts can acquire approval through this explicit UI confirmation. JSON rules stay unchanged. */

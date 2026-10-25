@@ -39,7 +39,7 @@ fun ramadanStatus(now: Instant, config: RamadanConfig, clockProblem: Boolean = f
     val dates = config.dates.sortedBy { it.firstFast }
     val active = dates.lastOrNull { today >= it.firstFast && today <= (it.eid ?: it.firstFast.plusDays(29)) }
     val next = dates.firstOrNull { it.firstFast > today && it.year <= today.year + 1 }
-    val selected = active ?: next ?: return RamadanStatus.Hidden(if (dates.isEmpty()) "Даты Рамадана не настроены" else "Период завершён; нужны даты следующего года")
+    val selected = active ?: next ?: return RamadanStatus.Hidden(if (dates.isEmpty()) "Даты Рамадана не настроены" else if (dates.any { it.firstFast > today }) "Нет дат Рамадана на этот или следующий год" else "Период завершён; нужны даты следующего года")
     if (!selected.approved) return RamadanStatus.Hidden("Рамадан скрыт: даты ${selected.year} не подтверждены мечетью")
     if (selected == next && active == null) return RamadanStatus.Before(ChronoUnit.DAYS.between(today, selected.firstFast).toInt(), selected)
     if (today == selected.eid) return RamadanStatus.Eid(selected)
