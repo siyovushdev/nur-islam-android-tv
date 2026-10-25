@@ -143,7 +143,9 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
-          target: google_apis
+          # Pixel Launcher in the Google image repeatedly ANRs during first boot,
+          # before app input. Use the official AOSP image, keeping every app check.
+          target: default
           arch: x86_64
           profile: pixel_5
           disable-animations: true
