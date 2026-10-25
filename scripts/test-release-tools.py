@@ -12,7 +12,7 @@ class DistributionGuards(unittest.TestCase):
     def invoke(self, script, *args):
         return subprocess.run([sys.executable, str(ROOT / 'scripts' / script), *map(str, args)], capture_output=True, text=True, timeout=15)
     def test_physical_targets_refused_before_any_adb_call(self):
-        for script, arguments in [('check-phone-apk.py', []), ('check-tv-apk.py', ['--baseline', 'unused.apk', '--tests', 'unused-tests.apk'])]:
+        for script, arguments in [('check-phone-apk.py', []), ('check-emulator-home.py', []), ('check-tv-apk.py', ['--baseline', 'unused.apk', '--tests', 'unused-tests.apk'])]:
             result = self.invoke(script, 'unused.apk', *arguments, '--serial', 'physical-device')
             self.assertEqual(2, result.returncode)
             self.assertIn('Only', result.stderr)

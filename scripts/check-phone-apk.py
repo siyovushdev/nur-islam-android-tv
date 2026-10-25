@@ -131,8 +131,18 @@ try:
         run("shell", "input", "keyevent", "4")
     screen_with("Импорт JSON / XLSX — выбрать файл")
     tap("Импорт JSON / XLSX — выбрать файл")
+    screen_with("NurIslam")
+    old_pid = run("shell", "pidof", package).strip()
+    assert old_pid.isdigit(), "Expected exactly one owned app process"
+    # Own Debug UID on an emulator only: simulate process death without force-stop
+    # (force-stop would also discard the pending activity result).
+    run("shell", "run-as", package, "--user", user_id, "kill", "-9", old_pid)
+    # Android retains the pending SAF result and recreates its stopped caller.
     tap_plain("NurIslam"); tap_plain(filename)
     screen_with("Проверка расписания")
+    new_pid = run("shell", "pidof", package).strip()
+    assert old_pid and new_pid and old_pid != new_pid, "The pending-result process-death check did not recreate the app"
+    (output / "saf-process-death.txt").write_text("PASS: stopped app process killed during SAF, selected file reopened preview in a new process; no auto-apply\n")
     assert screen_with("Применить расписание", control=True).get("enabled") == "false"
     screenshot("xlsx-preview")
     tap("Понимаю: тестовое расписание не утверждено мечетью")

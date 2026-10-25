@@ -129,6 +129,24 @@ class PhoneActivityTest {
             }
         }
     }
+    @Test fun pendingSafResultReopensPreviewAfterActivityRecreationWithoutAutoApply() {
+        val year = Instant.now().atZone(MoscowZone).year
+        val file = File(app.cacheDir, "pending-calendar.json").apply { writeText(ScheduleFixtures.json(year, "pending-saf").toString()) }
+        openSettings(); tap("Расписание"); tap("Импорт JSON / XLSX — выбрать файл")
+        val request = shadowOf(compose.activity).nextStartedActivityForResult
+        assertEquals(Intent.ACTION_OPEN_DOCUMENT, request.intent.action)
+        compose.activityRule.scenario.recreate()
+        compose.runOnIdle {
+            assertTrue(compose.activity.activityResultRegistry.dispatchResult(request.requestCode, android.app.Activity.RESULT_OK,
+                Intent().setData(android.net.Uri.fromFile(file))))
+        }
+        val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java]
+        compose.waitUntil(10_000) { shadowOf(android.os.Looper.getMainLooper()).idle(); vm.candidate.value != null && !vm.busy.value }
+        compose.onNodeWithTag("import-preview").assertIsDisplayed()
+        compose.onNodeWithTag("import-apply").assertIsNotEnabled()
+        assertNull(app.schedules.state.value.current)
+        file.delete()
+    }
     @Test fun phoneSafImportPreviewApplyAndRollbackUpdateVisibleSchedule() {
         val uri = android.net.Uri.parse("content://test.documents/phone-calendar.json")
         val year = Instant.now().atZone(MoscowZone).year

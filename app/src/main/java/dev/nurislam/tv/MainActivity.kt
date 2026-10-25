@@ -178,7 +178,7 @@ class MainActivity : ComponentActivity() {
             val mode = orientation?.candidate ?: settings.displayMode
             val focus = remember { FocusRequester() }
             val entry = remember { RemoteEntryGesture() }
-            LaunchedEffect(homeRequests.intValue) { admin = false; iqamahOpen = false; ramadanOpen = false; folderOpen = false; orientation = null; entry.reset() }
+            LaunchedEffect(homeRequests.intValue) { if (homeRequests.intValue > 0) { admin = false; iqamahOpen = false; ramadanOpen = false; folderOpen = false; orientation = null; entry.reset() } }
             val lifecycle = LocalLifecycleOwner.current.lifecycle
             DisposableEffect(lifecycle) {
                 val observer = LifecycleEventObserver { _, event ->
@@ -192,6 +192,7 @@ class MainActivity : ComponentActivity() {
             var folderTree by remember { mutableStateOf(DocumentFolder.treeOrNull(runCatching { importPrefs.getString("tree", null) }.getOrNull())) }
             val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
                 if (uri != null) {
+                    admin = true
                     try {
                         require(DocumentFolder.treeOrNull(uri.toString()) != null) { "Некорректная папка" }
                         contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -205,7 +206,7 @@ class MainActivity : ComponentActivity() {
                 catch (_: ActivityNotFoundException) { folderOpen = false; vm.message("В прошивке нет выбора папки SAF. Попробуйте системный выбор файла или резервный импорт по инструкции.") }
                 catch (_: SecurityException) { folderOpen = false; vm.message("Прошивка запретила выбор папки.") }
             }
-            val picker = rememberLauncherForActivityResult(ScheduleDocumentPicker()) { uri -> if (uri != null) vm.import(uri) }
+            val picker = rememberLauncherForActivityResult(ScheduleDocumentPicker()) { uri -> if (uri != null) { admin = true; vm.import(uri) } }
             fun launchSafely(intent: Intent, failure: String) {
                 try { startActivity(intent) }
                 catch (_: ActivityNotFoundException) { vm.message(failure) }
