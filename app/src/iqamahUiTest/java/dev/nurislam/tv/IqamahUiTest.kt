@@ -66,6 +66,8 @@ class IqamahUiTest {
             file.parentFile!!.mkdirs(); file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
     }
+    private fun SemanticsNodeInteraction.assertHighlighted(value: Boolean): SemanticsNodeInteraction =
+        assert(SemanticsMatcher.expectValue(BoardRowHighlighted, value))
     private fun noTextOverflow() {
         val action = androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult
         val nodes = compose.onAllNodes(SemanticsMatcher.keyIsDefined(action))
@@ -151,19 +153,20 @@ class IqamahUiTest {
         compose.onNodeWithText("До икамата · ТЕСТ").assertDoesNotExist()
         compose.runOnIdle { clock.value = start }
         compose.onNodeWithText("До икамата · ТЕСТ").assertIsDisplayed()
-        compose.onNodeWithTag("row-ASR").assertIsSelected()
-        compose.onNodeWithTag("row-MAGHRIB").assertIsNotSelected()
+        compose.onNodeWithTag("row-ASR").assertHighlighted(true).assertHasNoClickAction()
+            .assert(SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsProperties.Selected))
+        compose.onNodeWithTag("row-MAGHRIB").assertHighlighted(false)
         compose.onNodeWithTag("countdown").assert(hasAnyDescendant(hasText("00:12:00")))
         compose.runOnIdle { clock.value = start.plusSeconds(719) }
         compose.onNodeWithTag("countdown").assert(hasAnyDescendant(hasText("00:00:01")))
         compose.runOnIdle { clock.value = start.plusSeconds(720) }
         compose.onNodeWithTag("iqamah-arrival").assertIsDisplayed()
-        compose.onNodeWithTag("row-ASR").assertIsSelected()
+        compose.onNodeWithTag("row-ASR").assertHighlighted(true)
         compose.runOnIdle { clock.value = start.plusSeconds(780) }
         compose.onNodeWithTag("iqamah-arrival").assertDoesNotExist()
         compose.onNodeWithText("До икамата · ТЕСТ").assertDoesNotExist()
-        compose.onNodeWithTag("row-ASR").assertIsNotSelected()
-        compose.onNodeWithTag("row-MAGHRIB").assertIsSelected()
+        compose.onNodeWithTag("row-ASR").assertHighlighted(false)
+        compose.onNodeWithTag("row-MAGHRIB").assertHighlighted(true)
     }
     @Test fun editingAndDeletingExceptionKeepsSeasonalRule() {
         val regular = IqamahRule(IqamahPrayer.ASR, date, mode = IqamahMode.FIXED, value = 900)
@@ -253,11 +256,11 @@ class IqamahUiTest {
         val now = mutableStateOf(target.plusSeconds(120))
         val next = NextPrayer(dev.nurislam.tv.model.ScheduleEvent.FAJR_IN_MOSQUE, current.atTime(5, 30).atZone(MoscowZone).toInstant())
         compose.activity.setContent { NurIslamTheme { PrayerBoardScreen(now.value, now, calendar.day(current), next, false, false, iqamah = status.value) } }
-        compose.onNodeWithTag("row-ISHA-iqamah").assertIsSelected().assert(hasAnyDescendant(hasText(date.toString())))
-        compose.onNodeWithTag("row-ISHA").assertIsNotSelected().assert(hasAnyDescendant(hasText("19:02")))
+        compose.onNodeWithTag("row-ISHA-iqamah").assertHighlighted(true).assert(hasAnyDescendant(hasText(date.toString())))
+        compose.onNodeWithTag("row-ISHA").assertHighlighted(false).assert(hasAnyDescendant(hasText("19:02")))
         compose.runOnIdle { status.value = IqamahStatus.Idle(null, "") }
         compose.onNodeWithTag("row-ISHA-iqamah").assertDoesNotExist()
-        compose.onNodeWithTag("row-FAJR_IN_MOSQUE").assertIsSelected()
+        compose.onNodeWithTag("row-FAJR_IN_MOSQUE").assertHighlighted(true)
     }
     @Test fun actualFridayJumuahReturnsHighlightToAsrAfterArrival() {
         val friday = date.minusDays(1)
@@ -268,12 +271,12 @@ class IqamahUiTest {
             val next = (prayerStatus(now.value, schedules) as? PrayerStatus.Upcoming)?.prayer
             PrayerBoardScreen(now.value, now, calendar.day(friday), next, false, false, iqamah = iqamahStatus(now.value, config, schedules, true))
         } }
-        compose.onNodeWithTag("row-JUMUAH").assertIsSelected().assert(hasAnyDescendant(hasText("13:00")))
-        compose.onNodeWithTag("row-DHUHR").assertIsNotSelected().assert(hasAnyDescendant(hasText("12:05")))
-        compose.onNodeWithTag("row-ASR").assertIsNotSelected()
+        compose.onNodeWithTag("row-JUMUAH").assertHighlighted(true).assert(hasAnyDescendant(hasText("13:00")))
+        compose.onNodeWithTag("row-DHUHR").assertHighlighted(false).assert(hasAnyDescendant(hasText("12:05")))
+        compose.onNodeWithTag("row-ASR").assertHighlighted(false)
         compose.runOnIdle { now.value = at.plusSeconds(60) }
         compose.onNodeWithTag("row-JUMUAH").assertDoesNotExist()
-        compose.onNodeWithTag("row-ASR").assertIsSelected()
+        compose.onNodeWithTag("row-ASR").assertHighlighted(true)
     }
     @Test fun actualConflictBoardCanBeSafelyDisabledUsingOnlyDpad() {
         if (!BuildConfig.PHONE_PREVIEW) compose.onNodeWithText("Пропустить и открыть табло").performClick()
@@ -327,27 +330,27 @@ class IqamahUiTest {
             compose.onNodeWithTag("iqamah-time").assertIsDisplayed().assert(hasAnyDescendant(hasText("15:27")))
             compose.onNodeWithTag("countdown").assertIsDisplayed().assert(hasAnyDescendant(hasText("00:01:10")))
             compose.onNodeWithTag("row-ISHA").assertIsDisplayed()
-            compose.onNodeWithTag("row-ASR").assertIsSelected()
+            compose.onNodeWithTag("row-ASR").assertHighlighted(true)
             noTextOverflow()
             if (scale == 1f) image("${theme.name.lowercase()}-${mode.name.lowercase()}-waiting")
             val event = (status.value as IqamahStatus.Waiting).event
             compose.runOnIdle { status.value = IqamahStatus.Now(event, target.plusSeconds(60), false) }
             compose.onNodeWithTag("iqamah-arrival").assertIsDisplayed()
-            compose.onNodeWithTag("row-ASR").assertIsSelected()
+            compose.onNodeWithTag("row-ASR").assertHighlighted(true)
             noTextOverflow()
             compose.runOnIdle { status.value = IqamahStatus.Now(event, target.plusSeconds(300), true) }
             compose.onNodeWithTag("iqamah-dim").assertIsDisplayed()
             noTextOverflow()
             val jumuah = event.copy(prayer = IqamahPrayer.JUMUAH, start = null)
             compose.runOnIdle { status.value = IqamahStatus.Now(jumuah, target.plusSeconds(60), false) }
-            compose.onNodeWithTag("row-JUMUAH").assertIsDisplayed().assertIsSelected()
+            compose.onNodeWithTag("row-JUMUAH").assertIsDisplayed().assertHighlighted(true)
             compose.onNodeWithTag("row-JUMUAH").assert(hasAnyDescendant(hasText("Джума (пятница) · Икамат")))
-            compose.onNodeWithTag("row-DHUHR").assertIsNotSelected().assert(hasAnyDescendant(hasText("12:05")))
+            compose.onNodeWithTag("row-DHUHR").assertHighlighted(false).assert(hasAnyDescendant(hasText("12:05")))
             noTextOverflow()
             if (scale == 1f && mode == DisplayMode.LANDSCAPE) image("${theme.name.lowercase()}-jumuah")
             compose.runOnIdle { status.value = IqamahStatus.Conflict("Конфликт икаматов. Зухр 2026-10-24 15:30 / Аср 2026-10-24 15:20. Икамат на дату приостановлен; исправьте правила в настройках.") }
             compose.onNodeWithTag("iqamah-conflict").assertIsDisplayed()
-            compose.onNodeWithTag("row-ASR").assertIsNotSelected()
+            compose.onNodeWithTag("row-ASR").assertHighlighted(false)
             compose.onNodeWithTag("row-JUMUAH").assertDoesNotExist()
             noTextOverflow()
             if (scale == 1f && mode == DisplayMode.LANDSCAPE) image("${theme.name.lowercase()}-conflict")

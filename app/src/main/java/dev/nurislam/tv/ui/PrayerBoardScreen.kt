@@ -16,7 +16,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -29,6 +30,9 @@ import dev.nurislam.tv.model.*
 import dev.nurislam.tv.settings.BoardLanguage
 import java.time.Instant
 import java.time.LocalDate
+
+// A visual marker only: Selected would expose a read-only row as a checkable control.
+internal val BoardRowHighlighted = SemanticsPropertyKey<Boolean>("BoardRowHighlighted")
 
 @Composable
 fun PrayerBoardScreen(
@@ -208,21 +212,23 @@ private fun ScheduleTable(day: DaySchedule?, next: NextPrayer?, iqamah: IqamahSt
             val event = calendarEvent ?: requireNotNull(extra).prayer.event
             val highlight = if (active != null) extra != null || (separate == null && active.prayer.event == event)
                 else next?.event == event && next.at.atZone(MoscowZone).toLocalDate() == day?.date
+            val labels = eventLabels(event)
+            val time = extra?.at?.atZone(MoscowZone)?.toLocalTime()?.let(::formatTime) ?: day?.times?.get(event)?.let(::formatTime) ?: "—"
+            val description = (if (extra != null) "${extra.prayer.title} · Икамат · ${extra.at.atZone(MoscowZone).toLocalDate()}" else prayerLabel(labels.first, labels.second)) + "; $time" + if (highlight) "; выделен" else ""
             val color = when { highlight -> if (colors.ornate) colors.Gold else colors.Deep; event.isPrayer -> colors.Text; else -> colors.Secondary }
             val rowShape = RoundedCornerShape((24 * s).dp)
             val rowModifier = if (highlight) Modifier.background(if (colors.ornate) Brush.horizontalGradient(listOf(colors.Emerald, colors.Highlight, colors.Emerald)) else Brush.linearGradient(listOf(colors.Gold, colors.Gold)), rowShape)
                 .border((1.5f * s).dp, colors.Gold, rowShape) else if (!colors.ornate) Modifier.background(colors.Card.copy(alpha = .65f), rowShape).border((1f * s).dp, colors.Outline.copy(alpha = .42f), rowShape) else Modifier
-            Row(Modifier.weight(1f).fillMaxWidth().padding(vertical = (if (colors.ornate) 0f else (if (compact) 2f else 4f) * s).dp).then(rowModifier).padding(horizontal = (32 * s).dp).testTag(if (extra != null) "row-${extra.prayer.name}" + if (extra.prayer != IqamahPrayer.JUMUAH) "-iqamah" else "" else "row-${event.name}").semantics { selected = highlight }, verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f).fillMaxWidth().padding(vertical = (if (colors.ornate) 0f else (if (compact) 2f else 4f) * s).dp).then(rowModifier).padding(horizontal = (32 * s).dp).testTag(if (extra != null) "row-${extra.prayer.name}" + if (extra.prayer != IqamahPrayer.JUMUAH) "-iqamah" else "" else "row-${event.name}").semantics { this[BoardRowHighlighted] = highlight; contentDescription = description }, verticalAlignment = Alignment.CenterVertically) {
                 if (colors.ornate) {
                     EventIcon(event, color, Modifier.size((50 * s).dp))
                     Spacer(Modifier.width((32 * s).dp))
                 }
-                val labels = eventLabels(event)
                 Column(Modifier.weight(1f).fillMaxHeight().padding(vertical = (if (compact) 0f else 5 * s).dp), verticalArrangement = Arrangement.Center) {
                     BoardText(if (extra != null) "${extra.prayer.title} · Икамат" else stringResource(if (LocalBoardSettings.current.language == BoardLanguage.RUSSIAN) labels.second else labels.first), 36f, s, Modifier.fillMaxWidth().weight(.56f), color, bold = event.isPrayer, align = TextAlign.Start)
                     if (extra != null || LocalBoardSettings.current.language == BoardLanguage.BOTH) BoardText(if (extra != null) extra.at.atZone(MoscowZone).toLocalDate().toString() else stringResource(labels.second), 26f, s, Modifier.fillMaxWidth().weight(.44f), color.copy(alpha = .9f), align = TextAlign.Start)
                 }
-                BoardText(extra?.at?.atZone(MoscowZone)?.toLocalTime()?.let(::formatTime) ?: day?.times?.get(event)?.let(::formatTime) ?: "—", 56f, s,
+                BoardText(time, 56f, s,
                     Modifier.width((202 * s).dp).fillMaxHeight(), color, digits = true, align = TextAlign.End)
             }
             if (colors.ornate && index < rows.lastIndex) Box(Modifier.fillMaxWidth().height((1 * s).dp).background(colors.Secondary.copy(alpha = .16f)))
