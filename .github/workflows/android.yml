@@ -76,6 +76,7 @@ jobs:
         env:
           NUR_ISLAM_TEST_KEYSTORE_B64: ${{ secrets.NUR_ISLAM_TEST_KEYSTORE_B64 }}
           NUR_ISLAM_TEST_KEYSTORE_PASSWORD: ${{ secrets.NUR_ISLAM_TEST_KEYSTORE_PASSWORD }}
+          NUR_ISLAM_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -98,8 +99,16 @@ jobs:
           unset NUR_ISLAM_TEST_KEYSTORE_B64 NUR_ISLAM_TEST_KEYSTORE_PASSWORD
           python3 scripts/sign-test-apks.py --input test-binaries --output distributions --keystore "$task_signing_dir/test.jks" --password-file "$task_signing_dir/password"
           cp app/src/test/resources/xlsx/kazan-2026.xlsx distributions/phone/TEST-Kazan-2026.xlsx
-          cp docs/APK_INSTALL.md distributions/phone/INSTALL.md
-          cp docs/APK_INSTALL.md distributions/tv/INSTALL.md
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          sha = os.environ['NUR_ISLAM_SOURCE_SHA']
+          assert re.fullmatch(r'[0-9a-f]{40}', sha)
+          # Downloaded instructions must survive deletion of the Draft PR branch.
+          guide = Path('docs/APK_INSTALL.md').read_text().replace('/blob/codex/product-readiness/', f'/blob/{sha}/')
+          for variant in ('phone', 'tv'):
+              Path(f'distributions/{variant}/INSTALL.md').write_text(guide)
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: nur-islam-phone-debug
