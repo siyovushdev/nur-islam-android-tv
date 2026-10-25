@@ -8,7 +8,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -20,23 +20,26 @@ jobs:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew :app:assembleDebug :app:assembleRelease :app:assemblePhoneDebug :app:test :app:lintDebug :app:lintRelease :app:lintPhoneDebug :app:assembleDebugAndroidTest
-      - name: Verify and prepare signed phone APK
+      - name: Check distribution safety guards
+        run: python3 scripts/test-release-tools.py
+      - name: Build and verify all variants
         run: |
-          mkdir -p app/build/distributions
-          cp app/build/outputs/apk/phoneDebug/app-phoneDebug.apk app/build/distributions/Nur-Islam-Phone-Debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs app/build/distributions/Nur-Islam-Phone-Debug.apk > app/build/distributions/signature.txt
-          cd app/build/distributions
-          sha256sum Nur-Islam-Phone-Debug.apk > Nur-Islam-Phone-Debug.apk.sha256
+          code=$((1000 + GITHUB_RUN_NUMBER * 2))
+          ./gradlew -PnurIslamVersionCode="$code" :app:assembleDebug :app:assembleRelease :app:assemblePhoneDebug :app:test :app:lintDebug :app:lintRelease :app:lintPhoneDebug :app:assembleDebugAndroidTest
+          mkdir -p test-binaries/base test-binaries/updated
+          cp app/build/outputs/apk/debug/app-debug.apk test-binaries/base/tv.apk
+          cp app/build/outputs/apk/phoneDebug/app-phoneDebug.apk test-binaries/base/phone.apk
+          cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk test-binaries/tv-androidTest.apk
+          ./gradlew -PnurIslamVersionCode="$((code + 1))" :app:assembleDebug :app:assemblePhoneDebug
+          cp app/build/outputs/apk/debug/app-debug.apk test-binaries/updated/tv.apk
+          cp app/build/outputs/apk/phoneDebug/app-phoneDebug.apk test-binaries/updated/phone.apk
+          python3 scripts/check-apk-manifests.py test-binaries/updated/tv.apk test-binaries/updated/phone.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: nur-islam-phone-debug
-          path: app/build/distributions/
+          name: test-binaries
+          path: test-binaries/
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        with:
-          name: nur-islam-debug
-          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: nur-islam-release-unsigned
@@ -45,25 +48,93 @@ jobs:
         if: always()
         with:
           name: checks-and-screenshots
+          retention-days: 14
           path: |
             app/build/reports/
             app/build/screenshots/
-  phone-install:
+  sign-test-apks:
     needs: build
+    # Fork code never receives the persistent signing material.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          log-accepted-android-sdk-licenses: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: test-binaries
+          path: test-binaries
+      - name: Sign only test packages using the persistent external key
+        env:
+          NUR_ISLAM_TEST_KEYSTORE_B64: ${{ secrets.NUR_ISLAM_TEST_KEYSTORE_B64 }}
+          NUR_ISLAM_TEST_KEYSTORE_PASSWORD: ${{ secrets.NUR_ISLAM_TEST_KEYSTORE_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          task_signing_dir="$RUNNER_TEMP/nur-islam-test-signing"
+          mkdir -p "$task_signing_dir"
+          trap 'rm -rf "$task_signing_dir"' EXIT
+          export NUR_ISLAM_SIGNING_DIRECTORY="$task_signing_dir"
+          python3 - <<'PY'
+          import base64, os
+          from pathlib import Path
+          directory = Path(os.environ['NUR_ISLAM_SIGNING_DIRECTORY'])
+          key = os.environ['NUR_ISLAM_TEST_KEYSTORE_B64']
+          password = os.environ['NUR_ISLAM_TEST_KEYSTORE_PASSWORD']
+          if not key or not password:
+              raise SystemExit('Persistent test signing secrets are missing; no installable distribution published')
+          (directory / 'test.jks').write_bytes(base64.b64decode(key, validate=True))
+          (directory / 'password').write_text(password)
+          PY
+          unset NUR_ISLAM_TEST_KEYSTORE_B64 NUR_ISLAM_TEST_KEYSTORE_PASSWORD
+          python3 scripts/sign-test-apks.py --input test-binaries --output distributions --keystore "$task_signing_dir/test.jks" --password-file "$task_signing_dir/password"
+          cp app/src/test/resources/xlsx/kazan-2026.xlsx distributions/phone/TEST-Kazan-2026.xlsx
+          cp docs/PHONE_PREVIEW.md distributions/phone/INSTALL.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nur-islam-phone-debug
+          path: distributions/phone/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nur-islam-tv-debug
+          path: distributions/tv/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-test-support
+          path: distributions/support/
+          if-no-files-found: error
+          retention-days: 7
+  phone-install:
+    needs: sign-test-apks
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: nur-islam-phone-debug
           path: phone-apk
+      - uses: actions/download-artifact@v4
+        with:
+          name: signed-test-support
+          path: support
       - name: Enable KVM on the disposable CI runner
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Install the published APK and check touch navigation
+      - name: Install/update published APK, XLSX/JSON, Ramadan and real-time iqamah
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -71,9 +142,42 @@ jobs:
           arch: x86_64
           profile: pixel_5
           disable-animations: true
-          script: python3 scripts/check-phone-apk.py phone-apk/Nur-Islam-Phone-Debug.apk
+          script: python3 scripts/check-phone-apk.py phone-apk/Nur-Islam-Phone-Debug.apk --baseline support/phone-baseline.apk
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: phone-emulator-install
           path: phone-emulator-results/
+  tv-install:
+    needs: sign-test-apks
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: nur-islam-tv-debug
+          path: tv-apk
+      - uses: actions/download-artifact@v4
+        with:
+          name: signed-test-support
+          path: support
+      - name: Enable KVM on the disposable CI runner
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Native Android TV installation/update, D-pad and safe HOME round-trip
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: android-tv
+          arch: x86
+          profile: tv_1080p
+          disable-animations: true
+          script: python3 scripts/check-tv-apk.py tv-apk/Nur-Islam-TV-Debug.apk --baseline support/tv-baseline.apk --tests support/tv-androidTest.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tv-emulator-install
+          path: tv-emulator-results/

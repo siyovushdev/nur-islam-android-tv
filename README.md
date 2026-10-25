@@ -79,3 +79,5 @@ UI-проверки работают через Robolectric / native Skia, в т
 [COMPLETION_STATUS](docs/COMPLETION_STATUS.md).
 
 Необязательный блок Рамадана с отдельными подтверждёнными датами: [инструкция](docs/RAMADAN.md).
+
+Полная [инструкция администратора](docs/ADMIN_GUIDE.md), [подпись и обновление](docs/SIGNING_AND_UPDATES.md), [план аппаратной приёмки](docs/HARDWARE_ACCEPTANCE.md).

@@ -7,6 +7,13 @@ import android.provider.DocumentsContract
 /** Uses only a user-granted SAF tree, never broad storage or filesystem permissions. */
 data class ImportDocument(val id: String, val name: String, val directory: Boolean)
 object DocumentFolder {
+    fun treeOrNull(value: String?): Uri? = runCatching {
+        require(!value.isNullOrBlank() && value.length <= 8192)
+        Uri.parse(value).also {
+            require(it.scheme == "content" && !it.authority.isNullOrBlank() && DocumentsContract.isTreeUri(it))
+            require(DocumentsContract.getTreeDocumentId(it).isNotBlank())
+        }
+    }.getOrNull()
     fun list(resolver: ContentResolver, tree: Uri, parentId: String): List<ImportDocument> {
         require(DocumentsContract.isTreeUri(tree)) { "Выберите папку через системный диалог" }
         val uri = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId)

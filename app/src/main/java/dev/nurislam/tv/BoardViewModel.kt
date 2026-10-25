@@ -72,7 +72,8 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
                 open().use { input ->
                     reference.set(input)
                     currentCoroutineContext().ensureActive()
-                    ScheduleImport.parse(input.readBytesBounded(ScheduleXlsx.MAX_BYTES), BuildConfig.PHONE_PREVIEW)
+                    val context = currentCoroutineContext()
+                    ScheduleImport.parse(input.readBytesBounded(ScheduleXlsx.MAX_BYTES), BuildConfig.PHONE_PREVIEW) { context.ensureActive() }
                 }
             }
         } finally { if (readingStream === reference) readingStream = null }

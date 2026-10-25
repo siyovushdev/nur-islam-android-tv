@@ -19,7 +19,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /** Policy decisions on all supported generations; no actual device owner is assigned. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [26, 29, 30, 31, 35])
+@Config(sdk = [26, 29, 30, 31, 34, 35])
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 class DeviceSetupControllerTest {
     private lateinit var prefs: SetupPreferences

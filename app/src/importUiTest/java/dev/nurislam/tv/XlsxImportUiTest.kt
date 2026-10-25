@@ -82,6 +82,27 @@ class XlsxImportUiTest {
         compose.onNodeWithText("Папка недоступна:", substring = true).assertExists()
         key(Key.DirectionDown); key(Key.Enter); assertTrue(reselected)
     }
+    @Test fun invalidSavedFolderUriOffersReselectionWithoutCrashing() {
+        var selected = false
+        compose.activity.setContent { NurIslamTheme { ImportFolderScreen(Uri.parse("file:///invalid"), BuildConfig.PHONE_PREVIEW, {}, { selected = true }, {}) } }
+        compose.onNodeWithText("Папка недоступна").assertExists()
+        key(Key.Enter); assertTrue(selected)
+        assertNull(DocumentFolder.treeOrNull("content://example.documents/not-a-tree"))
+        assertNull(DocumentFolder.treeOrNull("bad"))
+    }
+    @Test fun futureImportWarnsIfItEvictsTheOnlyCalendarForToday() {
+        val year = java.time.Instant.now().atZone(dev.nurislam.tv.model.MoscowZone).year
+        val previous = ScheduleFixtures.schedule(year)
+        val current = ScheduleFixtures.schedule(year + 1)
+        val future = ScheduleFixtures.schedule(year + 2)
+        compose.activity.setContent { NurIslamTheme { ScheduleImportPreview(future, ScheduleState(current, previous, true), false, BuildConfig.PHONE_PREVIEW, {}, {}) } }
+        compose.onNodeWithTag("import-displaces-current-year").performScrollTo().assertExists()
+    }
+    @Test fun importRetainingCalendarForTodayDoesNotShowEvictionWarning() {
+        val year = java.time.Instant.now().atZone(dev.nurislam.tv.model.MoscowZone).year
+        compose.activity.setContent { NurIslamTheme { ScheduleImportPreview(ScheduleFixtures.schedule(year + 1), ScheduleState(ScheduleFixtures.schedule(year), loaded = true), false, BuildConfig.PHONE_PREVIEW, {}, {}) } }
+        compose.onNodeWithTag("import-displaces-current-year").assertDoesNotExist()
+    }
     @Test fun activityImportsExcelAndRestoresExactOriginalTimesAfterRestartAndRollback() {
         val app = compose.activity.application as NurIslamApplication
         compose.waitUntil(10_000) { app.schedules.state.value.loaded }

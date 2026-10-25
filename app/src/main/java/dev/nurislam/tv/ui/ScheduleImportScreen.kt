@@ -126,6 +126,10 @@ fun ScheduleImportPreview(
                 }
                 Text("Сверьте источник, особенно Фаджр и Иша. approved=true и конвертация из Excel сами по себе не подтверждают утверждение мечетью.",
                     color = colors.Secondary, fontSize = (24 * s).sp, modifier = Modifier.padding(vertical = 8.dp))
+                if (schedules.scheduleFor(today) != null && dev.nurislam.tv.data.ScheduleState(candidate, schedules.current, loaded = true).scheduleFor(today) == null) {
+                    Text("После импорта календарь на текущую дату будет вытеснен: хранятся только два последних импорта. Сначала сохраните нужные исходные файлы. При отсутствии года табло покажет отсутствие данных.",
+                        color = colors.Gold, fontSize = (24 * s).sp, modifier = Modifier.testTag("import-displaces-current-year"))
+                }
                 if (candidate.metadata.year != today.year) Text("Год отличается от даты устройства. Без календаря на текущий год табло не покажет времена.",
                     color = colors.Gold, fontSize = (24 * s).sp)
             }

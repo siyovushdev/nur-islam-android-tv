@@ -16,7 +16,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 30, 31, 35])
+@Config(sdk = [26, 29, 30, 31, 34, 35])
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 class ProvisioningTest {
     private fun result(intent: Intent, owner: Boolean = false): Pair<Int, Intent?> {
