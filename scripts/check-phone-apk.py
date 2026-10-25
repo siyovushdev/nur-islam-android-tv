@@ -273,7 +273,8 @@ try:
     screen_with("ТЕСТОВОЕ РАСПИСАНИЕ")
     def ramadan_caption():
         current = datetime.datetime.fromtimestamp(int(run("shell", "date", "+%s").strip()), ZoneInfo("Europe/Moscow")).date()
-        return "До первого дня поста Рамадан: " + str((first_fast - current).days) + " дн."
+        days_left = str((first_fast - current).days)
+        return "Беренче ураза көненә: " + days_left + " көн\nДо первого дня поста Рамадан: " + days_left + " дн."
     screen_with(ramadan_caption())
     screenshot("ramadan-phone-board")
     tap("Настройки")
