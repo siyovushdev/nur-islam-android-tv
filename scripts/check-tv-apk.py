@@ -8,6 +8,8 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import io
+import tarfile
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('apk', type=Path)
@@ -38,6 +40,8 @@ stock = None
 changed = False
 try:
     assert '1' == run('shell', 'getprop', 'ro.kernel.qemu').strip(), 'The selected target is not an emulator'
+    user_id = run('shell', 'am', 'get-current-user').strip()
+    assert user_id.isdigit(), 'Cannot determine the active emulator user'
     stock = home()
     assert package not in stock and "ResolverActivity" not in stock, 'Baseline HOME must be a stock emulator launcher'
     result = run('install', '--no-incremental', str(args.baseline)); assert 'Success' in result
@@ -50,6 +54,8 @@ try:
         (out / (label + '.txt')).write_text(tests)
         assert 'OK (3 tests)' in tests and 'FAILURES' not in tests and 'INSTRUMENTATION_FAILED' not in tests, tests[-2000:]
     instrument('instrumentation-baseline')
+    capability = run('exec-out', 'run-as', package, '--user', user_id, 'cat', 'files/qa-home-capability.json')
+    (out / 'home-capability.json').write_text(capability)
     # Exercise only stock system HOME APIs on this disposable emulator. Restore in finally.
     changed = True
     command = run('shell', 'cmd', 'package', 'set-home-activity', '--user', 'current', component)
@@ -65,10 +71,10 @@ try:
     def private_hashes():
         result = {}
         for name in ('files/schedule-store.json', 'files/ramadan-store.json', 'shared_prefs/display.xml'):
-            contents = run('exec-out', 'run-as', package, 'cat', name)
+            contents = run('exec-out', 'run-as', package, '--user', user_id, 'cat', name)
             result[name] = hashlib.sha256(contents.encode()).hexdigest()
         return result
-    run('shell', 'am', 'force-stop', package)
+    run('shell', 'am', 'force-stop', '--user', 'current', package)
     before = private_hashes()
     result = run('install', '-r', '--no-incremental', str(args.apk)); assert 'Success' in result
     after = private_hashes()
@@ -77,7 +83,12 @@ try:
     (out / 'update-preservation.json').write_text(json.dumps({'result': 'PASS', 'before': before, 'after': after}, indent=2))
     instrument('instrumentation')
     assert home() == stock
-    run('pull', '/sdcard/Android/data/' + package + '/files/qa-screenshots', str(out / 'screenshots'))
+    images = subprocess.check_output(adb + ['exec-out', 'run-as', package, '--user', user_id, 'tar', '-C', 'files/qa-screenshots', '-cf', '-', '.'], timeout=60)
+    (out / 'screenshots').mkdir(exist_ok=True)
+    with tarfile.open(fileobj=io.BytesIO(images)) as archive:
+        for item in archive.getmembers():
+            if item.isfile() and item.name.endswith('.png'):
+                (out / 'screenshots' / Path(item.name).name).write_bytes(archive.extractfile(item).read())
     screenshot('final-board')
     (out / 'result.txt').write_text('PASS: actual Android TV emulator API 34 install/update, native Compose D-pad/settings/themes/CW/CCW/scales, exact XLSX 2920 values/apply/rollback, Ramadan confirmation/persistence, reversible HOME; no physical TV/reboot/Device Owner/Lock Task\n')
 finally:

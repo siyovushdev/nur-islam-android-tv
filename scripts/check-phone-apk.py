@@ -78,6 +78,8 @@ def screenshot(name):
 
 try:
     assert run("shell", "getprop", "ro.kernel.qemu").strip() == "1", "Target must be an emulator"
+    user_id = run("shell", "am", "get-current-user").strip()
+    assert user_id.isdigit(), "Cannot determine active emulator user"
     result = run("install", "--no-incremental", str(args.baseline or args.apk))
     (output / "install.txt").write_text(result)
     assert "Success" in result, result
@@ -136,7 +138,7 @@ try:
     tap("Понимаю: тестовое расписание не утверждено мечетью")
     tap("Применить расписание")
     screen_with("Тестовое расписание применено")
-    envelope = json.loads(run("exec-out", "run-as", package, "cat", "files/schedule-store.json"))
+    envelope = json.loads(run("exec-out", "run-as", package, "--user", user_id, "cat", "files/schedule-store.json"))
     excel = json.loads(envelope["current"]["json"])
     oracle = [line.split("\t") for line in Path("app/src/test/resources/xlsx/kazan-2026.tsv").read_text().splitlines()]
     keys = ["suhurEnd", "fajrInMosque", "sunrise", "zawal", "dhuhr", "asr", "maghrib", "isha"]
@@ -220,7 +222,7 @@ try:
     tap("Откат к предыдущему расписанию")
     tap("Подтвердить откат")
     tap("Понятно")
-    restored = json.loads(json.loads(run("exec-out", "run-as", package, "cat", "files/schedule-store.json"))["current"]["json"])
+    restored = json.loads(json.loads(run("exec-out", "run-as", package, "--user", user_id, "cat", "files/schedule-store.json"))["current"]["json"])
     assert restored == excel, "Rollback did not recover the exact imported XLSX calendar"
     screenshot("xlsx-rollback")
     tap("Импорт из локальной папки")
@@ -338,7 +340,7 @@ try:
         def private_hashes():
             result = {}
             for name in ("files/schedule-store.json", "files/ramadan-store.json", "files/iqamah-store.json", "shared_prefs/display.xml"):
-                contents = run("exec-out", "run-as", package, "cat", name)
+                contents = run("exec-out", "run-as", package, "--user", user_id, "cat", name)
                 result[name] = hashlib.sha256(contents.encode()).hexdigest()
             return result
         before = private_hashes()

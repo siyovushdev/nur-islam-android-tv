@@ -36,7 +36,7 @@ class NativeIntegrationTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("prayer-board").fetchSemanticsNodes().isNotEmpty() }
         if (android.os.Build.VERSION.SDK_INT >= 29) {
             val roles = app.getSystemService(android.app.role.RoleManager::class.java)
-            File(app.getExternalFilesDir(null), "qa-home-capability.json").writeText(com.google.gson.JsonObject().apply {
+            File(app.filesDir, "qa-home-capability.json").writeText(com.google.gson.JsonObject().apply {
                 addProperty("available", roles?.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME) == true)
                 addProperty("held", roles?.isRoleHeld(android.app.role.RoleManager.ROLE_HOME) == true)
             }.toString())
@@ -45,7 +45,7 @@ class NativeIntegrationTest {
     }
     private fun settings() { key(Key.DirectionCenter, 5); key(Key.DirectionDown); key(Key.Enter); compose.onNodeWithText("Тема:", substring = true).assertExists() }
     private fun screenshot(name: String) {
-        val file = File(app.getExternalFilesDir(null), "qa-screenshots/$name.png").apply { parentFile!!.mkdirs() }
+        val file = File(app.filesDir, "qa-screenshots/$name.png").apply { parentFile!!.mkdirs() }
         val image = compose.onRoot().captureToImage().asAndroidBitmap()
         file.outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
