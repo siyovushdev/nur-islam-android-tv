@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Modifier
@@ -44,6 +45,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.nurislam.tv.data.*
 import dev.nurislam.tv.domain.*
+import dev.nurislam.tv.iqamah.*
 import dev.nurislam.tv.model.MoscowZone
 import dev.nurislam.tv.settings.OrientationPreview
 import dev.nurislam.tv.ui.*
@@ -163,6 +165,9 @@ class MainActivity : ComponentActivity() {
             val appliedSchedule by vm.appliedSchedule.collectAsStateWithLifecycle()
             val busy by vm.busy.collectAsStateWithLifecycle()
             val message by vm.message.collectAsStateWithLifecycle()
+            val iqamah by vm.iqamah.collectAsStateWithLifecycle()
+            val clockProblem by vm.clockProblem.collectAsStateWithLifecycle()
+            var iqamahOpen by remember { mutableStateOf(false) }
             var admin by remember { mutableStateOf(false) }
             var showEntryHint by remember { mutableStateOf(true) }
             LaunchedEffect(Unit) { delay(15_000); showEntryHint = false }
@@ -170,7 +175,7 @@ class MainActivity : ComponentActivity() {
             val mode = orientation?.candidate ?: settings.displayMode
             val focus = remember { FocusRequester() }
             val entry = remember { RemoteEntryGesture() }
-            LaunchedEffect(homeRequests.intValue) { admin = false; orientation = null; entry.reset() }
+            LaunchedEffect(homeRequests.intValue) { admin = false; iqamahOpen = false; orientation = null; entry.reset() }
             val lifecycle = LocalLifecycleOwner.current.lifecycle
             DisposableEffect(lifecycle) {
                 val observer = LifecycleEventObserver { _, event ->
@@ -190,9 +195,15 @@ class MainActivity : ComponentActivity() {
             NurIslamTheme(settings.theme) {
                 CompositionLocalProvider(LocalBoardSettings provides settings) {
                     val now = rememberBoardClock()
+                    LaunchedEffect(now) { snapshotFlow { now.value }.collect { vm.sampleClock(it, SystemClock.elapsedRealtime()) } }
                     val minute by remember(now) { derivedStateOf { now.value.truncatedTo(ChronoUnit.MINUTES) } }
+                    val iqamahStatus = remember(minute, iqamah.config, schedules, clockProblem) {
+                        iqamahStatus(minute, iqamah.config, schedules, BuildConfig.DEBUG, clockProblem)
+                    }
+                    val demoIqamah = iqamah.config.enabled && !iqamah.config.approved
                     val date = minute.atZone(MoscowZone).toLocalDate()
                     val active = remember(schedules, date) { schedules.scheduleFor(date) }
+                    val iqamahCompatibility = remember(date, schedules, iqamah.config) { iqamahCompatibilityWarning(date, iqamah.config, schedules) }
                     val testSchedule = active != null && isTestScheduleSource(active.metadata.source)
                     val day = remember(active, date) { active?.day(date) }
                     val status = remember(schedules, minute) { prayerStatus(minute, schedules) }
@@ -214,13 +225,18 @@ class MainActivity : ComponentActivity() {
                         }.focusRequester(focus).focusable()) {
                         val resolved = resolveDisplayMode(mode, constraints.maxWidth, constraints.maxHeight)
                         val board: @Composable () -> Unit = {
-                            PrayerBoardScreen(minute, now, day, next, resolved == DisplayMode.LANDSCAPE, false, status = status,
-                                notice = if (setupMessage != null && !setupOpen) setupMessage else if (schedules.problem != null) stringResource(R.string.storage_notice) else if (testSchedule) "Тестовый источник · Не официальное расписание" else if (showEntryHint && !BuildConfig.PHONE_PREVIEW) stringResource(R.string.settings_hint) else null)
+                            // Modal settings must hide the board from accessibility/touch automation.
+                            Box(Modifier.fillMaxSize().then(if (admin || setupOpen) Modifier.clearAndSetSemantics {} else Modifier)) {
+                            PrayerBoardScreen(minute, now, day, next, resolved == DisplayMode.LANDSCAPE, false, status = status, iqamah = if (iqamah.config.enabled) iqamahStatus else null,
+                                notice = if (setupMessage != null && !setupOpen) setupMessage else if (schedules.problem != null) stringResource(R.string.storage_notice) else if (iqamah.problem != null) iqamah.problem else if (iqamahCompatibility != null) iqamahCompatibility else if (demoIqamah && BuildConfig.DEBUG) "ТЕСТОВЫЕ ПРАВИЛА ИКАМАТА · Не утверждены мечетью" else if (testSchedule) "Тестовый источник · Не официальное расписание" else if (showEntryHint && !BuildConfig.PHONE_PREVIEW) stringResource(R.string.settings_hint) else null)
+                            }
                         }
                         val overlays: @Composable () -> Unit = {
-                            if (admin && !setupOpen) AdminPanel(settings, schedules, candidate, busy, message, BuildConfig.VERSION_NAME,
+                            if (admin && !setupOpen && !iqamahOpen) AdminPanel(settings, schedules, candidate, busy, message, BuildConfig.VERSION_NAME,
                                 getExternalFilesDir(null)?.absolutePath ?: "Папка недоступна",
                                 focusToken = orientation, touchMode = BuildConfig.PHONE_PREVIEW, appliedSchedule = appliedSchedule,
+                                iqamahCalendarNotice = if (iqamah.config.rules.any { it.baseCalendar != null }) "Икамат хранится отдельно. Проверьте базовые поля нового календаря: прежние подтверждения действуют только для того же файла. Несовместимые относительные правила приостановлены." else null,
+                                onIqamah = { iqamahOpen = true },
                                 onSettings = { change -> vm.settings(change) },
                                 onOrientation = { orientation = OrientationPreview(it, SystemClock.elapsedRealtime() + 15_000) },
                                 onPickFile = {
@@ -244,6 +260,11 @@ class MainActivity : ComponentActivity() {
                                     vm.dismissCandidate()
                                     vm.dismissMessage()
                                 })
+                            if (iqamahOpen && admin && !setupOpen) IqamahPanel(iqamah, schedules, busy, message,
+                                BuildConfig.PHONE_PREVIEW, clockProblem,
+                                onClockConfirm = { vm.confirmClock(now.value, SystemClock.elapsedRealtime()) },
+                                onSave = vm::saveIqamah, onRollback = vm::rollbackIqamah,
+                                onDismissMessage = vm::dismissMessage, onClose = { iqamahOpen = false; admin = false })
                             if (setupOpen) {
                                 // Revision also tracks non-persistent trial/proof state of the controller.
                                 @Suppress("UNUSED_VARIABLE") val revision = setupRevision
@@ -300,12 +321,12 @@ class MainActivity : ComponentActivity() {
                                         } else {
                                             admin = true
                                         }
-                                    }, modifier = Modifier.testTag("phone-settings")) {
+                                    }, enabled = !iqamahOpen, modifier = Modifier.testTag("phone-settings")) {
                                         Text(if (admin) "Табло" else "Настройки", color = LocalBoardAppearance.current.Gold, fontSize = 16.sp)
                                     }
                                 }
-                                if (testSchedule && !admin && !setupOpen) {
-                                    Text("ТЕСТОВОЕ РАСПИСАНИЕ", color = LocalBoardAppearance.current.Deep,
+                                if ((testSchedule || demoIqamah) && !admin && !setupOpen) {
+                                    Text(listOfNotNull(if (testSchedule) "ТЕСТОВОЕ РАСПИСАНИЕ" else null, if (demoIqamah) "ТЕСТОВЫЙ ИКАМАТ" else null).joinToString(" · "), color = LocalBoardAppearance.current.Deep,
                                         fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                                         modifier = Modifier.fillMaxWidth().background(LocalBoardAppearance.current.Gold)
                                             .padding(horizontal = 12.dp, vertical = 8.dp).testTag("test-schedule-banner"))

@@ -20,9 +20,9 @@ import androidx.compose.ui.unit.sp
 
 /** In-app keyboard remains correctly rotated on TVs where the system IME cannot rotate. */
 @Composable
-fun RemoteLabelEditor(initial: String, maxLength: Int, onSave: (String) -> Unit, onCancel: () -> Unit, touchMode: Boolean = false) {
+fun RemoteLabelEditor(initial: String, maxLength: Int, onSave: (String) -> Unit, onCancel: () -> Unit, touchMode: Boolean = false, title: String = "Название / местоположение", label: String = "Подпись на табло") {
     if (touchMode) {
-        PhoneLabelEditor(initial, maxLength, onSave, onCancel)
+        PhoneLabelEditor(initial, maxLength, onSave, onCancel, title, label)
         return
     }
     var value by remember { mutableStateOf(initial) }
@@ -66,7 +66,7 @@ fun RemoteLabelEditor(initial: String, maxLength: Int, onSave: (String) -> Unit,
         val s = minOf(maxWidth.value / 1080f, maxHeight.value / 1080f)
         val colors = LocalBoardAppearance.current
         Column(Modifier.fillMaxSize().padding(maxWidth * .06f)) {
-            Text("Название / местоположение", color = colors.Gold, fontSize = (38 * s).sp)
+            Text(title, color = colors.Gold, fontSize = (38 * s).sp)
             Text(value.ifEmpty { "…" }, color = colors.Text, fontSize = (40 * s).sp, modifier = Modifier.fillMaxWidth().padding(vertical = (20 * s).dp).testTag("label-value"))
             Text("${value.length}/$maxLength · D-pad + OK · Готово — сохранить · BACK — отменить", color = colors.Secondary, fontSize = (22 * s).sp)
             Spacer(Modifier.height((20 * s).dp))
@@ -85,14 +85,14 @@ fun RemoteLabelEditor(initial: String, maxLength: Int, onSave: (String) -> Unit,
 }
 
 @Composable
-private fun PhoneLabelEditor(initial: String, maxLength: Int, onSave: (String) -> Unit, onCancel: () -> Unit) {
+private fun PhoneLabelEditor(initial: String, maxLength: Int, onSave: (String) -> Unit, onCancel: () -> Unit, title: String, label: String) {
     var value by remember { mutableStateOf(initial) }
     BackHandler(onBack = onCancel)
     Column(Modifier.fillMaxSize().background(LocalBoardAppearance.current.Deep).imePadding()
         .verticalScroll(rememberScrollState()).padding(16.dp).testTag("label-editor")) {
-        Text("Название / местоположение", color = LocalBoardAppearance.current.Gold, fontSize = 20.sp)
+        Text(title, color = LocalBoardAppearance.current.Gold, fontSize = 20.sp)
         OutlinedTextField(value, onValueChange = { value = it.take(maxLength) },
-            label = { Text("Подпись на табло") }, modifier = Modifier.fillMaxWidth().testTag("label-value"),
+            label = { Text(label) }, modifier = Modifier.fillMaxWidth().testTag("label-value"),
             supportingText = { Text("${value.length}/$maxLength") })
         Button(onClick = { onSave(value.trim()) }, enabled = value.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Сохранить") }
         TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Отменить") }

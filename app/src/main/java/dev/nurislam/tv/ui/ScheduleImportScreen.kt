@@ -36,11 +36,7 @@ import java.time.Instant
 internal val ImportActionHighlighted = SemanticsPropertyKey<Boolean>("ImportActionHighlighted")
 
 /** A warning based on explicit source labels, never evidence that other sources are official. */
-private val TestSourceLabel = Regex(
-    """(?:^|[^\p{L}\p{N}])(?:test[\p{L}\p{N}]*|synthetic[\p{L}\p{N}]*|demo[\p{L}\p{N}]*|тест[\p{L}\p{N}]*|демо[\p{L}\p{N}]*|макет[\p{L}\p{N}]*)(?=$|[^\p{L}\p{N}])""",
-    RegexOption.IGNORE_CASE,
-)
-fun isTestScheduleSource(source: String): Boolean = TestSourceLabel.containsMatchIn(source)
+fun isTestScheduleSource(source: String): Boolean = dev.nurislam.tv.data.isTestSource(source)
 
 @Composable
 fun ScheduleImportPreview(
@@ -174,7 +170,7 @@ fun ScheduleImportPreview(
 }
 
 @Composable
-fun ScheduleImportResult(schedule: ValidatedSchedule, touchMode: Boolean, onBoard: () -> Unit, onDismiss: () -> Unit) {
+fun ScheduleImportResult(schedule: ValidatedSchedule, touchMode: Boolean, onBoard: () -> Unit, onDismiss: () -> Unit, iqamahNotice: String? = null) {
     var selection by remember { mutableIntStateOf(0) }
     val focus = remember { FocusRequester() }
     val colors = LocalBoardAppearance.current
@@ -199,6 +195,7 @@ fun ScheduleImportResult(schedule: ValidatedSchedule, touchMode: Boolean, onBoar
                 if (testSource) Text("Не утверждено мечетью. Только для демонстрации.", color = colors.Gold, fontSize = (28 * s).sp)
                 Text("Табло обновлено. Сохранено ${schedule.days.size} дней на ${schedule.metadata.year} год.", color = colors.Text, fontSize = (30 * s).sp)
                 Text("Источник: ${schedule.metadata.source}", color = colors.Secondary, fontSize = (26 * s).sp, modifier = Modifier.padding(vertical = 12.dp))
+                if (iqamahNotice != null) Text(iqamahNotice, color = colors.Gold, fontSize = (28 * s).sp)
                 Text("Управление версиями и откат — в разделе «Расписание».", color = colors.Secondary, fontSize = (24 * s).sp)
             }
             listOf("Вернуться к табло", "К расписанию").forEachIndexed { index, label ->

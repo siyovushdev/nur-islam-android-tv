@@ -1,10 +1,10 @@
 # Телефонный Debug APK
 
-Тестовая сборка интерфейса для Android 8.0 / API 26 и новее. Kotlin + Jetpack Compose, без WebView. Основана на реализации PR #13; его merge для сборки не нужен.
+Тестовая сборка интерфейса для Android 8.0 / API 26 и новее. Kotlin + Jetpack Compose, без WebView. Включает принятые исправления PR #13/#14 и отдельную настройку икамата; см. [инструкцию](IQAMAH.md).
 
 ## Скачать и установить без ADB
 
-1. В GitHub Actions откройте успешный запуск Android для ветки `codex/phone-debug-preview`, скачайте artifact **nur-islam-phone-debug**. Для скачивания Actions artifacts нужна авторизация в GitHub.
+1. В GitHub Actions откройте успешный запуск Android для нужного PR/ветки (для Issue #15 — `codex/iqamah-rules`), скачайте artifact **nur-islam-phone-debug**. Для скачивания Actions artifacts нужна авторизация в GitHub.
 2. Распакуйте ZIP и откройте **Nur-Islam-Phone-Debug.apk** в файловом менеджере телефона.
 3. Если Android попросит, разрешите «Установку неизвестных приложений» только этому файловому менеджеру/браузеру, установите APK, затем отзовите это разрешение.
 4. В списке приложений появится **«Нур Ислам · Телефон (тест)»**. Root, ADB и назначение HOME не требуются.

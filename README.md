@@ -71,3 +71,5 @@ UI-проверки работают через Robolectric / native Skia, в т
 - [Темы и настройки](design/THEMES_AND_SETTINGS.md), [Elegant PNG](design/reference_original.png), [Classic SVG](design/CLASSIC_REFERENCE.svg)
 - [Эксплуатация, HOME, импорт, подпись и восстановление](docs/TV_OPERATIONS.md)
 - [Отчёт MVP и снимки](docs/MVP_REPORT.md), [исторический этап 1](docs/STAGE_1_REPORT.md)
+
+Икамат: [настройка, демонстрация и проверка](docs/IQAMAH.md). Правила по умолчанию пусты; официальные параметры утверждает администрация мечети.

@@ -187,4 +187,63 @@ class PhoneActivityTest {
         screenshot("test-schedule-banner")
     }
 
+    @Test fun iqamahEditorSavesThroughActualViewModelAndRestoresAfterRecreation() {
+        val year = Instant.now().atZone(MoscowZone).year
+        runBlocking { app.schedules.apply(ScheduleFixtures.schedule(year, meaning = "PRAYER_START")) }
+        compose.waitUntil(10_000) { app.iqamah.state.value.loaded }
+        openSettings(); tap("Икамат")
+        compose.onNodeWithTag("prayer-board").assertDoesNotExist()
+        fun iqaTap(text: String) {
+            compose.onNodeWithTag("iqamah-list").performScrollToNode(hasText(text))
+            compose.onNodeWithText(text).performClick(); waitIo()
+        }
+        iqaTap("Функция икамата"); iqaTap("Аср"); iqaTap("Режим: Отключено")
+        iqaTap("Значение: не задано")
+        compose.onNodeWithTag("iqamah-number").performTextReplacement("1630")
+        compose.onNodeWithText("Применить ввод").performClick()
+        iqaTap("Добавить в черновик")
+        compose.onNodeWithTag("iqamah-save").performClick()
+        iqaTap("Подтвердить сохранение")
+        compose.onNodeWithText("Правила сохранены").assertIsDisplayed()
+        iqaTap("Вернуться к табло")
+        compose.onNodeWithTag("test-schedule-banner").assertTextContains("ТЕСТОВЫЙ ИКАМАТ", substring = true)
+        assertEquals(990, app.iqamah.state.value.config.rules.single().value)
+        val repo = dev.nurislam.tv.iqamah.IqamahRepository(dev.nurislam.tv.data.AtomicScheduleStorage(File(app.filesDir, "iqamah-store.json")))
+        runBlocking { repo.load() }
+        assertEquals(app.iqamah.state.value.config, repo.state.value.config)
+        compose.activityRule.scenario.recreate()
+        compose.onNodeWithTag("test-schedule-banner").assertTextContains("ТЕСТОВЫЙ ИКАМАТ", substring = true)
+        openSettings(); tap("Икамат")
+        iqaTap("Сегодня: начало / икамат / правило")
+        compose.onNodeWithText("Начало: не подтверждено · Икамат: 16:30", substring = true).performScrollTo().assertIsDisplayed()
+        screenshot("iqamah-today")
+    }
+
+    @Test fun legacyConflictShowsOnBoardAndViewModelRejectsEnablingItWithoutChangingTimes() {
+        val today = Instant.now().atZone(MoscowZone).toLocalDate()
+        val calendar = ScheduleFixtures.schedule(today.year, meaning = "PRAYER_START")
+        runBlocking { app.schedules.apply(calendar) }
+        compose.waitUntil(10_000) { app.iqamah.state.value.loaded }
+        val bad = dev.nurislam.tv.iqamah.IqamahConfig(enabled = true, source = "TEST", rules = listOf(
+            dev.nurislam.tv.iqamah.IqamahRule(dev.nurislam.tv.iqamah.IqamahPrayer.DHUHR, today, mode = dev.nurislam.tv.iqamah.IqamahMode.FIXED, value = 950),
+            dev.nurislam.tv.iqamah.IqamahRule(dev.nurislam.tv.iqamah.IqamahPrayer.ASR, today, mode = dev.nurislam.tv.iqamah.IqamahMode.FIXED, value = 930)))
+        val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java]
+        compose.runOnIdle { vm.saveIqamah(bad) }; waitIo()
+        assertFalse(app.iqamah.state.value.config.enabled)
+        assertTrue(vm.message.value!!.contains("Конфликт икаматов"))
+        compose.runOnIdle { vm.dismissMessage() }
+        // A file from an older build or rollback must be guarded at runtime too.
+        runBlocking { app.iqamah.save(bad) }
+        compose.onNodeWithTag("iqamah-conflict").assertIsDisplayed()
+        compose.onNodeWithTag("iqamah-time").assertDoesNotExist()
+        assertEquals(listOf(950, 930), app.iqamah.state.value.config.rules.map { it.value })
+        assertEquals(calendar.json, app.schedules.state.value.current!!.json)
+        screenshot("iqamah-conflict")
+        compose.activityRule.scenario.recreate()
+        compose.onNodeWithTag("iqamah-conflict").assertIsDisplayed()
+        compose.runOnIdle { androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java].saveIqamah(bad.copy(enabled = false)) }; waitIo()
+        compose.onNodeWithTag("iqamah-conflict").assertDoesNotExist()
+        assertEquals(listOf(950, 930), app.iqamah.state.value.config.rules.map { it.value })
+    }
+
 }

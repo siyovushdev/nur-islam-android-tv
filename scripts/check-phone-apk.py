@@ -27,8 +27,8 @@ def run(*command):
                           capture_output=True, timeout=45).stdout
 
 
-def screen_with(label, control=False):
-    deadline = time.monotonic() + 30
+def screen_with(label, control=False, timeout=30):
+    deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         run("shell", "uiautomator", "dump", "/sdcard/nur-phone-smoke.xml")
         xml = run("exec-out", "cat", "/sdcard/nur-phone-smoke.xml")
@@ -54,6 +54,18 @@ def tap(label):
     node = screen_with(label, control=True)
     x1, y1, x2, y2 = map(int, re.findall(r"\d+", node.attrib["bounds"]))
     run("shell", "input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2))
+
+
+def tap_scrolled(label):
+    for attempt in range(8):
+        try:
+            node = screen_with(label, control=True, timeout=2)
+            x1, y1, x2, y2 = map(int, re.findall(r"\d+", node.attrib["bounds"]))
+            run("shell", "input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2))
+            return
+        except AssertionError:
+            run("shell", "input", "swipe", "500", "1500", "500", "600", "250")
+    raise AssertionError("Cannot reach: " + label)
 
 
 def screenshot(name):
@@ -137,6 +149,76 @@ try:
     screen_with("ТЕСТОВОЕ РАСПИСАНИЕ")
     screen_with("15:15")
     screenshot("restored-test-schedule-banner")
-    (output / "result.txt").write_text("PASS: signed APK install, LAUNCHER, no HOME entry point, touch settings/theme/scale, cold process restart; unapproved test-source block/cancel; approved phone-test acknowledge/apply/result/board; persistent banner after restart\n")
+    tap("Настройки")
+    tap_scrolled("Икамат")
+    screen_with("ТЕСТОВЫЕ ПРАВИЛА · не утверждены мечетью")
+    screenshot("iqamah-defaults")
+    tap("Функция икамата")
+    # Pick a synthetic demonstration prayer whose arrival window is before its
+    # next JSON prayer start. Missing iqamah rules must not bypass that boundary.
+    device_seconds = int(run("shell", "date", "+%s").strip())
+    target_seconds = (device_seconds // 60 + 2) * 60
+    target = datetime.datetime.fromtimestamp(target_seconds, ZoneInfo("Europe/Moscow"))
+    slots = [("Фаджр", "05:30", "12:05"),
+             ("Джума (пятница)" if target.weekday() == 4 else "Зухр", "12:05", "15:15"),
+             ("Аср", "15:15", "17:48"), ("Магриб", "17:48", "19:02"), ("Иша", "19:02", None)]
+    for prayer_title, row_time, boundary in slots:
+        if boundary is None or target + datetime.timedelta(minutes=1) <= datetime.datetime.combine(target.date(), datetime.time.fromisoformat(boundary), ZoneInfo("Europe/Moscow")):
+            break
+    if prayer_title == "Джума (пятница)":
+        row_time = target.strftime("%H:%M")  # Jumuah's separate iqamah row, not JSON Dhuhr.
+    tap_scrolled(prayer_title)
+    tap("Режим: Отключено")
+    tap("Значение: не задано")
+    tap("Цифры без разделителей")
+    run("shell", "input", "text", target.strftime("%H%M"))
+    run("shell", "input", "keyevent", "4")  # Hide only the phone IME.
+    tap("Применить ввод")
+    tap_scrolled("Добавить в черновик")
+    tap("Сохранить")
+    screen_with("Сохранить правила?")
+    screenshot("iqamah-confirm")
+    tap("Подтвердить сохранение")
+    screen_with("Правила сохранены")
+    tap("Вернуться к табло")
+    screen_with("ТЕСТОВОЕ РАСПИСАНИЕ · ТЕСТОВЫЙ ИКАМАТ")
+    # A fixed iqamah with unknown start must not show a fabricated waiting countdown.
+    screenshot("iqamah-fixed-before")
+    run("shell", "am", "force-stop", package)
+    run("shell", "am", "start", "-W", "-n", component)
+    screen_with("ТЕСТОВОЕ РАСПИСАНИЕ · ТЕСТОВЫЙ ИКАМАТ")
+    restored_xml = (output / "screen.xml").read_text()
+    assert "До икамата" not in restored_xml, "Unknown start produced a false waiting countdown"
+    assert "начало не подтверждено" in restored_xml.lower()
+    assert target.strftime("%H:%M") in restored_xml, "Entered iqamah time was changed"
+    screenshot("iqamah-restored")
+    remaining = target_seconds - int(run("shell", "date", "+%s").strip())
+    assert remaining > 0, "Fixture time elapsed before restart checks; timing budget needs adjustment"
+    time.sleep(remaining + 2)
+    screen_with("Икамат")
+    arrival_xml = (output / "screen.xml").read_text()
+    screenshot("iqamah-arrival")
+    highlighted = [node for node in ET.fromstring(arrival_xml).iter("node") if node.get("content-desc", "").endswith("; выделен")]
+    assert len(highlighted) == 1, "Active iqamah must highlight exactly one schedule row"
+    description = highlighted[0].get("content-desc")
+    assert prayer_title in description and row_time in description, "Arrival must highlight the configured prayer without replacing JSON times"
+    assert highlighted[0].get("checkable") == "false", "Read-only row must not be exposed as a checkbox"
+    time.sleep(60)
+    # The arrival must finish instead of looping indefinitely.
+    run("shell", "uiautomator", "dump", "/sdcard/nur-phone-smoke.xml")
+    final_xml = run("exec-out", "cat", "/sdcard/nur-phone-smoke.xml")
+    assert 'text="Икамат"' not in final_xml, "Arrival did not end"
+    # Restore the actual next JSON prayer. It can legitimately still be Asr when
+    # this synthetic fixed iqamah was entered before Asr's unconfirmed start.
+    highlighted = [node for node in ET.fromstring(final_xml).iter("node") if node.get("content-desc", "").endswith("; выделен")]
+    now = datetime.datetime.fromtimestamp(int(run("shell", "date", "+%s").strip()), ZoneInfo("Europe/Moscow"))
+    prayer_fields = {"fajrInMosque", "dhuhr", "asr", "maghrib", "isha"}
+    upcoming = [value for field, value in zip(fields, values) if field in prayer_fields and value > now.strftime("%H:%M")]
+    if upcoming:
+        assert len(highlighted) == 1 and ("; " + upcoming[0] + "; выделен") in highlighted[0].get("content-desc", ""), "Next-prayer highlight was not restored"
+    else:
+        assert not highlighted, "Tomorrow's prayer must not highlight today's row"
+    screenshot("iqamah-finished")
+    (output / "result.txt").write_text("PASS: signed APK install, LAUNCHER, no HOME entry point, touch settings/theme/scale, cold process restart; unapproved test-source block/cancel; approved phone-test acknowledge/apply/result/board; persistent banner; iqamah default-off, explicit touch entry/save/confirmation, process restart, real-time arrival and automatic exit; no system settings changed\n")
 finally:
     (output / "android-runtime.txt").write_text(run("logcat", "-d", "-t", "150", "-s", "AndroidRuntime"))
