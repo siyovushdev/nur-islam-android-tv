@@ -61,6 +61,7 @@ fun AdminPanel(
     onDeviceSetup: (() -> Unit)? = null,
     onIqamah: (() -> Unit)? = null,
     onImportFolder: (() -> Unit)? = null,
+    onRamadan: (() -> Unit)? = null,
     onHomeSettings: () -> Unit,
     onOtherLauncher: () -> Unit,
     onClose: () -> Unit,
@@ -124,6 +125,7 @@ fun AdminPanel(
             AdminItem("Диагностика") { navigate(AdminPage.DIAGNOSTICS) },
             if (touchMode) null else AdminItem("Основной экран HOME / безопасный выход") { navigate(AdminPage.HOME) },
             AdminItem("Икамат", "Отдельные правила, даты изменений и исключения. Без вымышленных интервалов.", onIqamah != null) { onIqamah?.invoke() },
+            AdminItem("Рамадан", "Необязательный блок: отдельно подтверждённые даты, без вымышленных значений.", onRamadan != null) { onRamadan?.invoke() },
         )
         page == AdminPage.DISPLAY -> listOf(AdminItem("Назад") { navigate(AdminPage.SETTINGS) }) + DisplayMode.entries.map { mode ->
             val label = stringResource(when (mode) {

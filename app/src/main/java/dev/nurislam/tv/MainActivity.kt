@@ -166,8 +166,11 @@ class MainActivity : ComponentActivity() {
             val busy by vm.busy.collectAsStateWithLifecycle()
             val message by vm.message.collectAsStateWithLifecycle()
             val iqamah by vm.iqamah.collectAsStateWithLifecycle()
+            val ramadan by vm.ramadan.collectAsStateWithLifecycle()
             val clockProblem by vm.clockProblem.collectAsStateWithLifecycle()
+            var ramadanOpen by remember { mutableStateOf(false) }
             var iqamahOpen by remember { mutableStateOf(false) }
+            var folderOpen by remember { mutableStateOf(false) }
             var admin by remember { mutableStateOf(false) }
             var showEntryHint by remember { mutableStateOf(true) }
             LaunchedEffect(Unit) { delay(15_000); showEntryHint = false }
@@ -175,7 +178,7 @@ class MainActivity : ComponentActivity() {
             val mode = orientation?.candidate ?: settings.displayMode
             val focus = remember { FocusRequester() }
             val entry = remember { RemoteEntryGesture() }
-            LaunchedEffect(homeRequests.intValue) { admin = false; iqamahOpen = false; orientation = null; entry.reset() }
+            LaunchedEffect(homeRequests.intValue) { admin = false; iqamahOpen = false; ramadanOpen = false; folderOpen = false; orientation = null; entry.reset() }
             val lifecycle = LocalLifecycleOwner.current.lifecycle
             DisposableEffect(lifecycle) {
                 val observer = LifecycleEventObserver { _, event ->
@@ -185,7 +188,6 @@ class MainActivity : ComponentActivity() {
                 onDispose { lifecycle.removeObserver(observer) }
             }
             LaunchedEffect(admin, orientation, setupOpen) { if (!admin && orientation == null && !setupOpen) focus.requestFocus() }
-            var folderOpen by remember { mutableStateOf(false) }
             val importPrefs = remember { getSharedPreferences("import-folder", Context.MODE_PRIVATE) }
             var folderTree by remember { mutableStateOf(importPrefs.getString("tree", null)?.let(android.net.Uri::parse)) }
             val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -219,6 +221,7 @@ class MainActivity : ComponentActivity() {
                     }
                     val demoIqamah = iqamah.config.enabled && !iqamah.config.approved
                     val date = minute.atZone(MoscowZone).toLocalDate()
+                    val ramadanStatus = remember(date, ramadan.config, clockProblem) { dev.nurislam.tv.ramadan.ramadanStatus(minute, ramadan.config, clockProblem) }
                     val active = remember(schedules, date) { schedules.scheduleFor(date) }
                     val iqamahCompatibility = remember(date, schedules, iqamah.config) { iqamahCompatibilityWarning(date, iqamah.config, schedules) }
                     val testSchedule = active != null && isTestScheduleSource(active.metadata.source)
@@ -245,15 +248,17 @@ class MainActivity : ComponentActivity() {
                             // Modal settings must hide the board from accessibility/touch automation.
                             Box(Modifier.fillMaxSize().then(if (admin || setupOpen) Modifier.clearAndSetSemantics {} else Modifier)) {
                             PrayerBoardScreen(minute, now, day, next, resolved == DisplayMode.LANDSCAPE, false, status = status, iqamah = if (iqamah.config.enabled) iqamahStatus else null,
-                                notice = if (setupMessage != null && !setupOpen) setupMessage else if (schedules.problem != null) stringResource(R.string.storage_notice) else if (iqamah.problem != null) iqamah.problem else if (iqamahCompatibility != null) iqamahCompatibility else if (demoIqamah && BuildConfig.DEBUG) "ТЕСТОВЫЕ ПРАВИЛА ИКАМАТА · Не утверждены мечетью" else if (testSchedule) "Тестовый источник · Не официальное расписание" else if (showEntryHint && !BuildConfig.PHONE_PREVIEW) stringResource(R.string.settings_hint) else null)
+                                ramadan = dev.nurislam.tv.ramadan.ramadanText(ramadanStatus, settings.language),
+                                notice = if (setupMessage != null && !setupOpen) setupMessage else if (schedules.problem != null) stringResource(R.string.storage_notice) else if (iqamah.problem != null) iqamah.problem else if (ramadan.problem != null) ramadan.problem else if (iqamahCompatibility != null) iqamahCompatibility else if (demoIqamah && BuildConfig.DEBUG) "ТЕСТОВЫЕ ПРАВИЛА ИКАМАТА · Не утверждены мечетью" else if (testSchedule) "Тестовый источник · Не официальное расписание" else if (showEntryHint && !BuildConfig.PHONE_PREVIEW) stringResource(R.string.settings_hint) else null)
                             }
                         }
                         val overlays: @Composable () -> Unit = {
-                            if (admin && !setupOpen && !iqamahOpen && !folderOpen) AdminPanel(settings, schedules, candidate, busy, message, BuildConfig.VERSION_NAME,
+                            if (admin && !setupOpen && !iqamahOpen && !ramadanOpen && !folderOpen) AdminPanel(settings, schedules, candidate, busy, message, BuildConfig.VERSION_NAME,
                                 getExternalFilesDir(null)?.absolutePath ?: "Папка недоступна",
                                 focusToken = orientation, touchMode = BuildConfig.PHONE_PREVIEW, appliedSchedule = appliedSchedule,
                                 iqamahCalendarNotice = if (iqamah.config.rules.any { it.baseCalendar != null }) "Икамат хранится отдельно. Проверьте базовые поля нового календаря: прежние подтверждения действуют только для того же файла. Несовместимые относительные правила приостановлены." else null,
                                 onIqamah = { iqamahOpen = true },
+                                onRamadan = { ramadanOpen = true },
                                 onImportFolder = { if (folderTree == null) chooseFolder() else folderOpen = true },
                                 onSettings = { change -> vm.settings(change) },
                                 onOrientation = { orientation = OrientationPreview(it, SystemClock.elapsedRealtime() + 15_000) },
@@ -285,6 +290,9 @@ class MainActivity : ComponentActivity() {
                                 onClockConfirm = { vm.confirmClock(now.value, SystemClock.elapsedRealtime()) },
                                 onSave = vm::saveIqamah, onRollback = vm::rollbackIqamah,
                                 onDismissMessage = vm::dismissMessage, onClose = { iqamahOpen = false; admin = false })
+                            if (ramadanOpen && admin && !setupOpen) RamadanPanel(ramadan, busy, message, BuildConfig.PHONE_PREVIEW, clockProblem,
+                                onClockConfirm = { vm.confirmClock(now.value, SystemClock.elapsedRealtime()) }, onSave = vm::saveRamadan, onRollback = vm::rollbackRamadan,
+                                onDismissMessage = vm::dismissMessage, onClose = { ramadanOpen = false; admin = false })
                             if (setupOpen) {
                                 // Revision also tracks non-persistent trial/proof state of the controller.
                                 @Suppress("UNUSED_VARIABLE") val revision = setupRevision

@@ -45,6 +45,7 @@ fun PrayerBoardScreen(
     status: PrayerStatus? = null,
     notice: String? = null,
     iqamah: IqamahStatus? = null,
+    ramadan: String? = null,
 ) {
     // TextAutoSize keeps measurement state. Recreate only the visual subtree when
     // changing typeface/palette; keep the clock, calendar and settings outside it.
@@ -83,7 +84,7 @@ fun PrayerBoardScreen(
                     Header(scale, Modifier.weight(.26f))
                     ClockAndDate(minute, date, scale, Modifier.weight(.32f))
                     NextPrayerCard(next, now, day, date, scale, Modifier.weight(.32f), status, iqamah)
-                    Footer(demo, scale, Modifier.weight(.10f), notice)
+                    Footer(demo, scale, Modifier.weight(.10f), notice, ramadan)
                 }
                 ScheduleTable(day, next, iqamah, scale, Modifier.weight(1f).fillMaxHeight().padding(vertical = (26 * scale).dp))
             }
@@ -94,7 +95,7 @@ fun PrayerBoardScreen(
                 NextPrayerCard(next, now, day, date, scale, Modifier.weight(.19f), status, iqamah)
                 Spacer(Modifier.weight(.015f))
                 ScheduleTable(day, next, iqamah, scale, Modifier.weight(.38f))
-                Footer(demo, scale, Modifier.weight(.05f), notice)
+                Footer(demo, scale, Modifier.weight(.05f), notice, ramadan)
             }
         }
         if (iqamah is IqamahStatus.Now && iqamah.dim) {
@@ -244,13 +245,14 @@ private fun ScheduleTable(day: DaySchedule?, next: NextPrayer?, iqamah: IqamahSt
 }
 
 @Composable
-private fun Footer(demo: Boolean, s: Float, modifier: Modifier, notice: String?) {
+private fun Footer(demo: Boolean, s: Float, modifier: Modifier, notice: String?, ramadan: String?) {
     val colors = LocalBoardAppearance.current
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        if (colors.ornate) Ornament(Modifier.fillMaxWidth(.4f).height((24 * s).dp))
+        if (ramadan != null) BoardText(ramadan, 24f, s, Modifier.fillMaxWidth().weight(1.4f).testTag("ramadan-status"), color = colors.Gold, lines = if (LocalBoardSettings.current.language == BoardLanguage.BOTH) 2 else 1)
+        else if (colors.ornate) Ornament(Modifier.fillMaxWidth(.4f).height((24 * s).dp))
         if (demo) BoardText(stringResource(R.string.demo_label), 23f, s,
-            Modifier.fillMaxWidth().weight(1f).testTag("demo-label"), color = colors.Gold)
-        if (notice != null && !demo) BoardText(notice, 22f, s, Modifier.fillMaxWidth().weight(1f), color = colors.Secondary)
+            Modifier.fillMaxWidth().weight(if (ramadan != null) .6f else 1f).testTag("demo-label"), color = colors.Gold)
+        if (notice != null && !demo) BoardText(notice, 22f, s, Modifier.fillMaxWidth().weight(if (ramadan != null) .6f else 1f), color = colors.Secondary)
     }
 }
 

@@ -23,6 +23,9 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
     val settings = app.settings.state
     val schedules = app.schedules.state
     val iqamah = app.iqamah.state
+    val ramadan = app.ramadan.state
+    fun saveRamadan(config: dev.nurislam.tv.ramadan.RamadanConfig) = operation { app.ramadan.save(config) }
+    fun rollbackRamadan() = operation { app.ramadan.rollback() }
     private val clockGuard = dev.nurislam.tv.iqamah.IqamahClockGuard()
     private val mutableClockProblem = MutableStateFlow(false)
     val clockProblem = mutableClockProblem.asStateFlow()
