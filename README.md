@@ -50,7 +50,7 @@
 - Отчёты: `app/build/reports/`; Compose PNG: `app/build/screenshots/`.
 - CI выполняет те же проверки и сохраняет APK, отчёты и рендеры как artifacts. Production-релиз не публикуется.
 
-UI-проверки работают через Robolectric / native Skia, в том числе с **Release MainActivity**. Базовые проверки Compose дополнительно собираются в instrumentation APK; успешная сборка не означает, что он запускался на ТВ.
+UI-проверки работают через Robolectric / native Skia, в том числе с **Release MainActivity**. CI дополнительно запускает настоящие эмуляторы: Android TV API 34 (instrumentation до/после обновления APK) и Phone API 35 (SAF, касания, сохранение, икамат, обновление). Фактические результаты и ограничения HOME — в [матрице приёмки](docs/QA_MATRIX.md); физическая приёмка выполняется отдельно.
 
 ## Устройство кода
 

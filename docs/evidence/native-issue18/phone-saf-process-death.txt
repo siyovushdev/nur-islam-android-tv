@@ -1,0 +1,1 @@
+PASS: stopped app process killed during SAF, selected file reopened preview in a new process; no auto-apply

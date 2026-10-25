@@ -1,0 +1,1 @@
+PASS: 365 x 8 saved native Android XLSX values exactly match independent original-cell TSV; no Fajr inference; saved formula caches only
