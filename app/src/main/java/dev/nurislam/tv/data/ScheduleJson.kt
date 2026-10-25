@@ -23,6 +23,7 @@ class ValidatedSchedule internal constructor(
     val fajrMeaning: FajrMeaning,
     val days: Map<LocalDate, DaySchedule>,
     val json: String,
+    val excelNotice: String? = null,
 ) {
     fun day(date: LocalDate) = days[date]
 }

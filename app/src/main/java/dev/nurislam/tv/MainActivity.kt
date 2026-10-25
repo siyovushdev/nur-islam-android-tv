@@ -185,6 +185,23 @@ class MainActivity : ComponentActivity() {
                 onDispose { lifecycle.removeObserver(observer) }
             }
             LaunchedEffect(admin, orientation, setupOpen) { if (!admin && orientation == null && !setupOpen) focus.requestFocus() }
+            var folderOpen by remember { mutableStateOf(false) }
+            val importPrefs = remember { getSharedPreferences("import-folder", Context.MODE_PRIVATE) }
+            var folderTree by remember { mutableStateOf(importPrefs.getString("tree", null)?.let(android.net.Uri::parse)) }
+            val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+                if (uri != null) {
+                    try {
+                        contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        check(importPrefs.edit().putString("tree", uri.toString()).commit()) { "Не удалось сохранить доступ к папке" }
+                        folderTree = uri; folderOpen = true
+                    } catch (_: Exception) { vm.message("Не удалось сохранить доступ к папке. Попробуйте системный выбор файла.") }
+                }
+            }
+            fun chooseFolder() {
+                try { folderPicker.launch(folderTree) }
+                catch (_: ActivityNotFoundException) { vm.message("В прошивке нет выбора папки SAF. Попробуйте системный выбор файла или резервный импорт по инструкции.") }
+                catch (_: SecurityException) { vm.message("Прошивка запретила выбор папки.") }
+            }
             val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) vm.import(uri) }
             fun launchSafely(intent: Intent, failure: String) {
                 try { startActivity(intent) }
@@ -232,19 +249,20 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         val overlays: @Composable () -> Unit = {
-                            if (admin && !setupOpen && !iqamahOpen) AdminPanel(settings, schedules, candidate, busy, message, BuildConfig.VERSION_NAME,
+                            if (admin && !setupOpen && !iqamahOpen && !folderOpen) AdminPanel(settings, schedules, candidate, busy, message, BuildConfig.VERSION_NAME,
                                 getExternalFilesDir(null)?.absolutePath ?: "Папка недоступна",
                                 focusToken = orientation, touchMode = BuildConfig.PHONE_PREVIEW, appliedSchedule = appliedSchedule,
                                 iqamahCalendarNotice = if (iqamah.config.rules.any { it.baseCalendar != null }) "Икамат хранится отдельно. Проверьте базовые поля нового календаря: прежние подтверждения действуют только для того же файла. Несовместимые относительные правила приостановлены." else null,
                                 onIqamah = { iqamahOpen = true },
+                                onImportFolder = { if (folderTree == null) chooseFolder() else folderOpen = true },
                                 onSettings = { change -> vm.settings(change) },
                                 onOrientation = { orientation = OrientationPreview(it, SystemClock.elapsedRealtime() + 15_000) },
                                 onPickFile = {
-                                    try { picker.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
-                                    catch (_: ActivityNotFoundException) { vm.message("Файловый диалог SAF отсутствует. Используйте импорт из локальной папки; инструкция в docs/TV_OPERATIONS.md.") }
+                                    try { picker.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) }
+                                    catch (_: ActivityNotFoundException) { vm.message("Файловый диалог SAF отсутствует. Попробуйте выбор папки или резервный импорт по инструкции.") }
                                     catch (_: SecurityException) { vm.message("Доступ к файловому диалогу запрещён. Доступен импорт из локальной папки.") }
                                 },
-                                onInbox = { vm.importInbox() }, onApply = { vm.applyCandidate() }, onRollback = { vm.rollback() },
+                                onInbox = { vm.importInbox() }, onApply = { vm.applyCandidate(excelConfirmed = true) }, onRollback = { vm.rollback() },
                                 onDismissCandidate = vm::dismissCandidate, onDismissMessage = vm::dismissMessage,
                                 onTimeSettings = { launchSafely(Intent(Settings.ACTION_DATE_SETTINGS), "Настройки даты и времени недоступны. Откройте системные настройки вручную.") },
                                 onDeviceSetup = if (BuildConfig.PHONE_PREVIEW) null else ({ refreshDevice(); setupOpen = true }),
@@ -260,6 +278,8 @@ class MainActivity : ComponentActivity() {
                                     vm.dismissCandidate()
                                     vm.dismissMessage()
                                 })
+                            if (folderOpen && admin && !setupOpen && folderTree != null) ImportFolderScreen(folderTree!!, BuildConfig.PHONE_PREVIEW,
+                                onFile = { folderOpen = false; vm.import(it) }, onChooseFolder = ::chooseFolder, onClose = { folderOpen = false })
                             if (iqamahOpen && admin && !setupOpen) IqamahPanel(iqamah, schedules, busy, message,
                                 BuildConfig.PHONE_PREVIEW, clockProblem,
                                 onClockConfirm = { vm.confirmClock(now.value, SystemClock.elapsedRealtime()) },
