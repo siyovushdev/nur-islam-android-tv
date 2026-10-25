@@ -36,7 +36,7 @@
 
 | Native сценарий итогового stack | Фактическое доказательство | Статус |
 |---|---|---|
-| Phone API 35, опубликованный подписанный APK | SAF XLSX, 2920 значений, persisted folder grant + D-pad listing, JSON/rollback, Ramadan touch, настоящий отсчёт/приход/завершение икамата | PASS |
+| Phone API 35, опубликованный подписанный APK | SAF XLSX, 2920 значений, persisted folder grant + D-pad listing, JSON/rollback, Ramadan touch, реальное наступление/завершение fixed икамата; отсутствие ложного ожидания при неподтверждённой базе | PASS |
 | Phone upgrade | Более высокий versionCode, один закреплённый сертификат, SHA-256 приватных schedule/iqamah/Ramadan/settings до/после | PASS |
 | Android TV API 34 x86 | Реальные instrumentation MainActivity: XLSX 2920/apply/rollback, D-pad/themes/rotations/scales/recreate, Ramadan confirmation/save | PASS: 3 теста до + 3 после обновления, код 2530a71 |
 | TV upgrade | Приватные settings/calendar/Ramadan сохранены: SHA-256 до/после совпадают; native suite на обеих версиях | PASS |
@@ -47,6 +47,10 @@
 Проверки на API 26/29/30/31/34/35 в таблице выше — **Robolectric**, не шесть физических
 устройств. Native TV emulator — x86, не ARM64 H728. Native Phone API 35 не заменяет
 личную проверку на телефоне владельца. 72 часа не выполнялись.
+
+Обратный отсчёт **до икамата с подтверждённым началом** проверен unit/Compose-тестами.
+Native Phone fixture намеренно оставляет начало неподтверждённым: проверяет отсутствие
+вымышленного Waiting, затем настоящее наступление и завершение по часам Android.
 
 ## Аппаратная и религиозная приёмка
 
