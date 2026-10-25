@@ -9,7 +9,7 @@
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.HOME" /></intent>
     </queries>
     <application tools:remove="android:banner">
-        <!-- Replace the TV entry points only in this separate, signed Debug variant. -->
+        <!-- Both phone variants have ordinary launcher access and no device policies. -->
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" tools:node="replace">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

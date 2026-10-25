@@ -27,6 +27,13 @@ android {
             buildConfigField("boolean", "PHONE_PREVIEW", "true")
             matchingFallbacks += "debug"
         }
+        create("phoneRelease") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".phone"
+            versionNameSuffix = "-phone"
+            buildConfigField("boolean", "PHONE_PREVIEW", "true")
+            matchingFallbacks += "release"
+        }
     }
     buildFeatures { compose = true; buildConfig = true }
     sourceSets.getByName("androidTest").java.srcDir("src/sharedTest/java")
@@ -34,7 +41,13 @@ android {
     sourceSets.getByName("testDebug").java.srcDir("src/sharedTest/java")
     sourceSets.getByName("testDebug").java.srcDir("src/acceptanceTest/java")
     sourceSets.getByName("testRelease").java.srcDir("src/acceptanceTest/java")
-    listOf("testDebug", "testRelease", "testPhoneDebug").forEach { sourceSets.getByName(it).java.srcDir("src/iqamahUiTest/java"); sourceSets.getByName(it).java.srcDir("src/importUiTest/java"); sourceSets.getByName(it).java.srcDir("src/ramadanUiTest/java") }
+    listOf("phoneDebug", "phoneRelease").forEach {
+        sourceSets.getByName(it).manifest.srcFile("src/phone/AndroidManifest.xml")
+        sourceSets.getByName(it).res.srcDir("src/phone/res")
+    }
+    sourceSets.getByName("testPhoneRelease").java.srcDir("src/testPhoneDebug/java")
+    sourceSets.getByName("testPhoneRelease").resources.srcDir("src/testPhoneDebug/resources")
+    listOf("testDebug", "testRelease", "testPhoneDebug", "testPhoneRelease").forEach { sourceSets.getByName(it).java.srcDir("src/iqamahUiTest/java"); sourceSets.getByName(it).java.srcDir("src/importUiTest/java"); sourceSets.getByName(it).java.srcDir("src/ramadanUiTest/java") }
     testOptions {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
@@ -77,4 +90,8 @@ dependencies {
     add("testPhoneDebugImplementation", "androidx.compose.ui:ui-test-junit4")
     add("testPhoneDebugImplementation", "androidx.test.ext:junit:1.2.1")
     add("testPhoneDebugImplementation", "org.robolectric:robolectric:4.15.1")
+    add("testPhoneReleaseImplementation", platform("androidx.compose:compose-bom:2025.04.01"))
+    add("testPhoneReleaseImplementation", "androidx.compose.ui:ui-test-junit4")
+    add("testPhoneReleaseImplementation", "androidx.test.ext:junit:1.2.1")
+    add("testPhoneReleaseImplementation", "org.robolectric:robolectric:4.15.1")
 }
