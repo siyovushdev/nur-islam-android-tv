@@ -94,6 +94,12 @@ def settings():
     else: key(23)
     find('Загрузить расписание')
 
+def leave_appearance():
+    key(4)
+    find('Загрузить расписание')
+    tap_scroll('Вернуться к табло')
+    find('Настройки')
+
 def close_result():
     tap('Вернуться к табло')
     find('Нур Ислам' if legacy and not phone else 'Настройки')
@@ -164,14 +170,14 @@ try:
         tap('Подтверждаю: источник утверждён мечетью');tap('Применить расписание');close_result()
         board_value('15:15')
     else:
-        settings();tap('Внешний вид');tap('Тема: ELEGANT');tap('Масштаб текста: 100%');key(4);key(4)
+        settings();tap('Внешний вид');tap('Тема: ELEGANT');tap('Масштаб текста: 100%');leave_appearance()
         inbox(write_json('baseline-fixture.json',fixture));apply('Проверка расписания');board_value('15:15')
     image('before-update')
     if a.baseline:
         result=run('install','-r','--no-incremental',str(a.apk));assert 'Success' in result
         (out/'update-install.txt').write_text(result)
         legacy=False
-        restart();board_value('15:15');settings();tap('Внешний вид');find('Тема: CLASSIC');find('Масштаб текста: 115%');key(4);key(4)
+        restart();board_value('15:15');settings();tap('Внешний вид');find('Тема: CLASSIC');find('Масштаб текста: 115%');leave_appearance()
         checks.append('PASS: signed update retains imported schedule, theme and scale without uninstall')
     # Use a regional zone with enough daytime margin for a deterministic live iqamah.
     epoch=int(run('shell','date','+%s').strip())
@@ -188,7 +194,7 @@ try:
         settings();tap('Загрузить расписание')
         if not visible('TEST-schedule.json'): tap('NurIslam',plain=True)
         tap('TEST-schedule.json',plain=True);find('Проверка расписания');image('saf-preview');tap('Отмена')
-        find('Загрузить расписание');key(4)
+        find('Загрузить расписание');tap_scroll('Вернуться к табло');find('Настройки')
         checks.append('PASS: actual SAF selection, preview and cancellation without auto-apply')
     inbox(file);apply('Проверка расписания')
     for value in vals: board_value(value)
@@ -205,7 +211,8 @@ try:
     inbox(write_json('TEST-calendar.json',cal));find('Календарь мечети');image('calendar-preview-full');apply('Календарь мечети')
     find('До икамата',partial=True);find('Встреча сегодня',partial=True);find('До первого дня поста Рамадан: 5 дн.',partial=True)
     image('calendar-waiting')
-    before=ui_signature();restart();find('До икамата',partial=True);assert ui_signature()==before
+    before=ui_signature();assert len(before)==8,before
+    restart();find('До икамата',partial=True);assert ui_signature()==before
     checks.append('PASS: calendar import, regional Ramadan/event, iqamah waiting and process restart')
     remaining=int(target.timestamp())-int(run('shell','date','+%s').strip())
     assert remaining>0,'Live fixture expired during UI setup'
@@ -242,11 +249,15 @@ try:
     settings();tap_scroll('Загруженные данные');tap_scroll('Вернуть предыдущее расписание');close_result();find('Встреча сегодня',partial=True)
     checks.append('PASS: exact Release XLSX preview/apply/display/rollback, calendar preserved and reactivated')
     # Appearance changes are exercised with normal controls, independently of imported data.
-    settings();tap('Внешний вид');tap('Тема: CLASSIC');key(4);key(4);image('elegant-board')
-    settings();tap('Внешний вид');tap('Тема: ELEGANT');key(4);key(4);image('classic-board')
+    settings();tap('Внешний вид');tap('Тема: CLASSIC');leave_appearance();image('elegant-board')
+    settings();tap('Внешний вид');tap('Тема: ELEGANT');leave_appearance();image('classic-board')
     before=ui_signature()
+    assert len(before)==8, ('Expected eight visible table rows before reinstall',before)
+    (out/'before-final-reinstall.json').write_text(json.dumps(before,ensure_ascii=False,indent=2))
     assert 'Success' in run('install','-r','--no-incremental',str(a.apk))
-    restart();find('Встреча сегодня',partial=True);assert ui_signature()==before
+    restart();find('Встреча сегодня',partial=True)
+    after=ui_signature();(out/'after-final-reinstall.json').write_text(json.dumps(after,ensure_ascii=False,indent=2))
+    assert after==before,(before,after)
     checks.append('PASS: reinstall exact published APK retains new calendar and all visible times')
     checks.append('PASS: both themes, touch/short OK, offline APK with no network permission, saved calendar after final restart')
     (out/'result.json').write_text(json.dumps(dict(result='PASS',package=package,apkSha256=hashlib.sha256(a.apk.read_bytes()).hexdigest(),versionCode=new_code,source=os.environ.get('NUR_ISLAM_SOURCE_SHA',''),checks=checks),ensure_ascii=False,indent=2))
