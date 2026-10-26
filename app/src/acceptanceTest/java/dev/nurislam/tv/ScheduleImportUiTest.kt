@@ -77,7 +77,7 @@ class ScheduleImportUiTest {
         show(); key(Key.Enter)
         assertEquals(1, cancelCount)
         assertEquals(0, appliedCount)
-        compose.onNodeWithText("Импорт JSON — выбрать файл").assertIsDisplayed()
+        compose.onNodeWithText("Импорт JSON / XLSX — выбрать файл").assertIsDisplayed()
     }
     @Test fun replacingCandidateClearsConfirmation() {
         show()

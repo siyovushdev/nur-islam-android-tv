@@ -54,7 +54,8 @@ fun ScheduleImportPreview(
     val scope = rememberCoroutineScope()
     val testSource = isTestScheduleSource(candidate.metadata.source)
     val phoneTest = testSource && BuildConfig.PHONE_PREVIEW
-    val eligible = candidate.metadata.approved && (!testSource || phoneTest)
+    val excel = candidate.excelNotice != null
+    val eligible = (candidate.metadata.approved || excel) && (!testSource || phoneTest)
     val canApply = eligible && confirmed && !busy
     fun apply() { if (canApply) onApply() }
     fun cancel() { if (!busy) onCancel() }
@@ -101,6 +102,7 @@ fun ScheduleImportPreview(
                 }
                 Text("${candidate.locationName} · Europe/Moscow\nРевизия: ${candidate.metadata.revision} · approved=${candidate.metadata.approved}\nСмысл Фаджра: ${candidate.fajrMeaning}",
                     color = colors.Secondary, fontSize = (24 * s).sp)
+                candidate.excelNotice?.let { Text(it, color = colors.Gold, fontSize = (24 * s).sp, modifier = Modifier.testTag("import-excel-notice")) }
                 Text("Времена на $date — без корректировок", color = colors.Text, fontSize = (28 * s).sp,
                     modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
                 Row(Modifier.fillMaxWidth()) {
@@ -138,7 +140,7 @@ fun ScheduleImportPreview(
                         fontSize = (28 * s).sp, modifier = Modifier.padding(start = 8.dp))
                 }
                 Text(when {
-                    !candidate.metadata.approved -> "Применение запрещено: approved=false. Нужен утверждённый файл."
+                    !candidate.metadata.approved && !excel -> "Применение запрещено: approved=false. Нужен утверждённый файл."
                     testSource && !phoneTest -> "Тестовый файл можно просмотреть, но нельзя применить для работы мечети."
                     busy -> "Применение расписания…"
                     phoneTest -> if (confirmed) "Будет применено только для демонстрации, не для работы мечети."

@@ -55,9 +55,10 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun importInbox() = operation(importing = true) {
         mutableCandidate.value = readCandidate {
-            val file = File(app.getExternalFilesDir(null) ?: error("Локальная папка недоступна"), "incoming-schedule.json")
-            if (!file.isFile) error("В папке приложения нет incoming-schedule.json. См. инструкцию резервного импорта через ADB.")
-            file.inputStream()
+            val folder = app.getExternalFilesDir(null) ?: error("Локальная папка недоступна")
+            val files = listOf("incoming-schedule.json", "incoming-schedule.xlsx").map { File(folder, it) }.filter { it.isFile }
+            require(files.size == 1) { "Оставьте один incoming-schedule.json или incoming-schedule.xlsx в папке приложения. Для обычного импорта выберите файл или папку через меню." }
+            files.single().inputStream()
         }
     }
     private suspend fun readCandidate(open: () -> InputStream): ValidatedSchedule {
@@ -68,7 +69,7 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
                 open().use { input ->
                     reference.set(input)
                     currentCoroutineContext().ensureActive()
-                    ScheduleJson.parse(input.readBytesBounded())
+                    ScheduleImport.parse(input.readBytesBounded(ScheduleXlsx.MAX_BYTES), BuildConfig.PHONE_PREVIEW)
                 }
             }
         } finally { if (readingStream === reference) readingStream = null }
@@ -84,8 +85,12 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
         mutableCandidate.value = null
         mutableBusy.value = false
     }
-    fun applyCandidate() = operation {
-        val parsed = requireNotNull(mutableCandidate.value)
+    fun applyCandidate(excelConfirmed: Boolean = false) = operation {
+        val draft = requireNotNull(mutableCandidate.value)
+        val parsed = if (draft.excelNotice != null) {
+            require(excelConfirmed) { "Сначала подтвердите источник Excel в предпросмотре" }
+            ScheduleImport.confirmExcel(draft)
+        } else draft
         app.schedules.apply(parsed)
         mutableCandidate.value = null
         mutableAppliedSchedule.value = parsed

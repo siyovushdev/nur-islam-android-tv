@@ -157,7 +157,7 @@ class PhoneActivityTest {
         compose.onNodeWithTag("import-cancel").performClick()
         assertNull(vm.candidate.value)
         assertNull(app.schedules.state.value.current)
-        compose.onNodeWithText("Импорт JSON — выбрать файл").assertIsDisplayed()
+        compose.onNodeWithText("Импорт JSON / XLSX — выбрать файл").assertIsDisplayed()
     }
 
     @Test fun phoneTestJsonCanBeAppliedWithPersistentBannerAfterRecreation() {

@@ -60,6 +60,7 @@ fun AdminPanel(
     onTimeSettings: () -> Unit = {},
     onDeviceSetup: (() -> Unit)? = null,
     onIqamah: (() -> Unit)? = null,
+    onImportFolder: (() -> Unit)? = null,
     onHomeSettings: () -> Unit,
     onOtherLauncher: () -> Unit,
     onClose: () -> Unit,
@@ -136,9 +137,10 @@ fun AdminPanel(
         }
         page == AdminPage.SCHEDULE -> listOf(
             AdminItem("Назад") { navigate(AdminPage.SETTINGS) },
-            AdminItem("Импорт JSON — выбрать файл", "Системный файловый диалог (SAF); доступность зависит от прошивки") { onPickFile() },
-            AdminItem("Импорт из локальной папки", "incoming-schedule.json · резервный способ через ADB/USB. $inboxPath") { onInbox() },
+            AdminItem("Импорт JSON / XLSX — выбрать файл", "Системный файловый диалог (SAF); доступность зависит от прошивки") { onPickFile() },
+            AdminItem("Импорт из локальной папки", "incoming-schedule.json / .xlsx · резервный способ по инструкции. $inboxPath") { onInbox() },
             AdminItem("Откат к предыдущему расписанию", schedules.previous?.let { "${it.metadata.year} / ${it.metadata.revision}" } ?: "Резервной версии пока нет", schedules.previous != null) { navigate(AdminPage.ROLLBACK) },
+            AdminItem("Выбрать папку с JSON / XLSX", "USB или локальная папка: однократный выбор SAF, затем список файлов с управлением пультом.", onImportFolder != null) { onImportFolder?.invoke() },
             AdminItem("Последний применённый файл", data?.let { "${it.locationName}; ${it.metadata.year}; ${it.metadata.source}; revision=${it.metadata.revision}; approved=${it.metadata.approved}; ${it.days.size} дней; Фаджр=${it.fajrMeaning}" } ?: "Расписание не загружено", false) {},
             AdminItem("Состояние хранилища", schedules.problem ?: if (schedules.loaded) "Проверено; сеть не требуется" else "Загрузка…", false) {},
         )
