@@ -64,14 +64,14 @@ class AdminScreenshotsTest {
                 }
             }
         }
-        key(Key.DirectionDown); key(Key.Enter)
+        key(Key.DirectionDown, 2); key(Key.Enter)
         BoardThemeId.entries.forEach { id ->
             compose.runOnIdle { settings.value = settings.value.copy(theme = id) }
             compose.onNodeWithText("Тема: $id").assertIsDisplayed()
             image("admin-${id.name.lowercase()}-$name")
         }
-        key(Key.DirectionDown, 5); key(Key.Enter)
-        compose.onNodeWithTag("label-editor").assertIsDisplayed()
-        image("keyboard-$name")
+        key(Key.DirectionDown); key(Key.Enter)
+        compose.onNodeWithText("Ориентация экрана").assertIsDisplayed()
+        image("orientation-$name")
     }
 }

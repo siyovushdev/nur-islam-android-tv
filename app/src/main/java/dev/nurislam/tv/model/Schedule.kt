@@ -25,8 +25,7 @@ data class ScheduleMetadata(
     val schemaVersion: Int = 1,
 ) {
     init {
-        require(schemaVersion == 1)
-        require(timezone == MoscowZone)
+        require(schemaVersion in 1..2)
         require(source.isNotBlank() && revision.isNotBlank())
         require(year in 1..9999)
     }

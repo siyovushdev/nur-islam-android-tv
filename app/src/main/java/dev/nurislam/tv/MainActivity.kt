@@ -151,7 +151,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         if (!BuildConfig.PHONE_PREVIEW) {
             deviceSetup = DeviceSetupController(AndroidDeviceAccess(this), SetupPreferences.from(this))
-            setupOpen = !deviceSetup.preferences.completed
+            setupOpen = false
             refreshDevice()
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -167,7 +167,13 @@ class MainActivity : ComponentActivity() {
             val message by vm.message.collectAsStateWithLifecycle()
             val iqamah by vm.iqamah.collectAsStateWithLifecycle()
             val ramadan by vm.ramadan.collectAsStateWithLifecycle()
+            val mosqueCalendar by vm.mosqueCalendar.collectAsStateWithLifecycle()
+            val calendarCandidate by vm.calendarCandidate.collectAsStateWithLifecycle()
             val clockProblem by vm.clockProblem.collectAsStateWithLifecycle()
+            val legacyOrigin by vm.legacyOrigin.collectAsStateWithLifecycle()
+            val legacyReady by vm.legacyReady.collectAsStateWithLifecycle()
+            val legacyCompatible = legacyReady && (legacyOrigin == null || vm.legacyMatches(schedules))
+            val displayZone = schedules.current?.metadata?.timezone ?: mosqueCalendar.current?.zone ?: if (legacyOrigin == "without-schedule") MoscowZone else java.time.ZoneId.systemDefault()
             var ramadanOpen by remember { mutableStateOf(false) }
             var iqamahOpen by remember { mutableStateOf(false) }
             var folderOpen by remember { mutableStateOf(false) }
@@ -214,19 +220,35 @@ class MainActivity : ComponentActivity() {
             }
             BackHandler(!admin && !BuildConfig.PHONE_PREVIEW) { /* HOME board stays visible; settings provide a deliberate exit. */ }
             NurIslamTheme(settings.theme) {
-                CompositionLocalProvider(LocalBoardSettings provides settings) {
+                CompositionLocalProvider(LocalBoardSettings provides settings.copy(
+                    mosqueName = schedules.current?.mosqueName ?: mosqueCalendar.current?.takeIf { it.compatibility(schedules) == null }?.name ?: settings.mosqueName,
+                    location = schedules.current?.locationName ?: settings.location), LocalBoardZone provides displayZone) {
                     val now = rememberBoardClock()
                     LaunchedEffect(now) { snapshotFlow { now.value }.collect { vm.sampleClock(it, SystemClock.elapsedRealtime()) } }
                     val minute by remember(now) { derivedStateOf { now.value.truncatedTo(ChronoUnit.MINUTES) } }
-                    val iqamahStatus = remember(minute, iqamah.config, schedules, clockProblem) {
-                        iqamahStatus(minute, iqamah.config, schedules, BuildConfig.DEBUG, clockProblem)
+                    val date = minute.atZone(displayZone).toLocalDate()
+                    val calendar = mosqueCalendar.current
+                    val calendarDiagnostic = remember(calendar, schedules, date) {
+                        calendar?.let { c -> c.compatibility(schedules) ?: runCatching { c.validateAgainst(schedules) }.exceptionOrNull()?.message
+                            ?: if (date < c.from || date > c.until) "Календарь мечети действует ${c.from} — ${c.until}. Загрузите файл на текущую дату." else null }
+                            ?: mosqueCalendar.problem
                     }
-                    val demoIqamah = iqamah.config.enabled && !iqamah.config.approved
-                    val date = minute.atZone(MoscowZone).toLocalDate()
-                    val ramadanStatus = remember(date, ramadan.config, clockProblem) { dev.nurislam.tv.ramadan.ramadanStatus(minute, ramadan.config, clockProblem) }
+                    val useCalendar = calendar != null && calendarDiagnostic == null
+                    val calendarBoundaryNotice = remember(calendar, schedules, date, useCalendar) {
+                        if(useCalendar) iqamahBoundaryWarnings(calendar!!.iqamah, schedules, date).firstOrNull()
+                            ?.replace("(fajrInMosque / UNCONFIRMED)", "— колонка «в мечети» не задаёт начало молитвы") else null
+                    }
+                    val iqamahConfig = if (mosqueCalendar.hasDocument) { if (useCalendar) calendar!!.iqamah else IqamahConfig() } else if (legacyCompatible) iqamah.config else IqamahConfig()
+                    val ramadanConfig = if (mosqueCalendar.hasDocument) { if (useCalendar) calendar!!.ramadan else dev.nurislam.tv.ramadan.RamadanConfig() } else if (legacyCompatible) ramadan.config else dev.nurislam.tv.ramadan.RamadanConfig()
+                    val iqamahStatus = remember(minute, iqamahConfig, schedules, clockProblem) {
+                        iqamahStatus(minute, iqamahConfig, schedules, false, clockProblem)
+                    }
+                    val demoIqamah = iqamahConfig.enabled && (if(iqamahConfig.fromFile) iqamahConfig.demo else !iqamahConfig.approved)
+                    val ramadanStatus = remember(date, ramadanConfig, clockProblem, displayZone) { dev.nurislam.tv.ramadan.ramadanStatus(minute, ramadanConfig, clockProblem, displayZone, mosqueCalendar.hasDocument) }
                     val active = remember(schedules, date) { schedules.scheduleFor(date) }
-                    val iqamahCompatibility = remember(date, schedules, iqamah.config) { iqamahCompatibilityWarning(date, iqamah.config, schedules) }
+                    val iqamahCompatibility = remember(date, schedules, iqamahConfig) { iqamahCompatibilityWarning(date, iqamahConfig, schedules) }
                     val testSchedule = active != null && isTestScheduleSource(active.metadata.source)
+                    val demoData = testSchedule || (useCalendar && calendar!!.demo) || demoIqamah
                     val day = remember(active, date) { active?.day(date) }
                     val status = remember(schedules, minute) { prayerStatus(minute, schedules) }
                     val next = (status as? PrayerStatus.Upcoming)?.prayer
@@ -238,7 +260,7 @@ class MainActivity : ComponentActivity() {
                                 when {
                                     key.keyCode == KeyEvent.KEYCODE_MENU && key.action == KeyEvent.ACTION_DOWN -> { admin = true; true }
                                     key.keyCode in listOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER) -> {
-                                        if (key.action == KeyEvent.ACTION_UP && entry.click(SystemClock.elapsedRealtime())) admin = true
+                                        if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) admin = true
                                         true
                                     }
                                     else -> false
@@ -249,9 +271,22 @@ class MainActivity : ComponentActivity() {
                         val board: @Composable () -> Unit = {
                             // Modal settings must hide the board from accessibility/touch automation.
                             Box(Modifier.fillMaxSize().then(if (admin || setupOpen) Modifier.clearAndSetSemantics {} else Modifier)) {
-                            PrayerBoardScreen(minute, now, day, next, resolved == DisplayMode.LANDSCAPE, false, status = status, iqamah = if (iqamah.config.enabled) iqamahStatus else null,
-                                ramadan = dev.nurislam.tv.ramadan.ramadanText(ramadanStatus, settings.language),
-                                notice = if (setupMessage != null && !setupOpen) setupMessage else if (schedules.problem != null) stringResource(R.string.storage_notice) else if (iqamah.problem != null) iqamah.problem else if (ramadan.problem != null) ramadan.problem else if (iqamahCompatibility != null) iqamahCompatibility else if (demoIqamah && BuildConfig.DEBUG) "ТЕСТОВЫЕ ПРАВИЛА ИКАМАТА · Не утверждены мечетью" else if (testSchedule) "Тестовый источник · Не официальное расписание" else if (showEntryHint && !BuildConfig.PHONE_PREVIEW) stringResource(R.string.settings_hint) else null)
+                            PrayerBoardScreen(minute, now, day, next, resolved == DisplayMode.LANDSCAPE, false, status = status, iqamah = if (iqamahConfig.enabled) iqamahStatus else null,
+                                ramadan = listOfNotNull(dev.nurislam.tv.ramadan.ramadanText(ramadanStatus, settings.language), if(useCalendar) calendar!!.eventText(minute, settings.language) else null).joinToString(" · ").takeIf { it.isNotEmpty() },
+                                notice = when {
+                                    demoData -> "ТЕСТОВОЕ РАСПИСАНИЕ · ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ"
+                                    calendarDiagnostic != null || schedules.problem != null || iqamah.problem != null || ramadan.problem != null || iqamahCompatibility != null || (!mosqueCalendar.hasDocument && legacyReady && !legacyCompatible && (iqamah.config.rules.isNotEmpty() || ramadan.config.dates.isNotEmpty())) -> "Проверьте загруженные данные в настройках"
+                                    active == null -> "Загрузите расписание в настройках"
+                                    else -> null
+                                })
+                            if (!admin && !setupOpen) {
+                                TextButton(onClick = { admin = true }, modifier = Modifier.align(Alignment.TopEnd).padding(horizontal = 16.dp).testTag("board-settings")) {
+                                    Text("Настройки", color = LocalBoardAppearance.current.Gold)
+                                }
+                                if (active == null) TextButton(onClick = { admin = true }, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp).testTag("load-schedule")) {
+                                    Text("Загрузить расписание", color = LocalBoardAppearance.current.Gold)
+                                }
+                            }
                             }
                         }
                         val overlays: @Composable () -> Unit = {
@@ -259,6 +294,9 @@ class MainActivity : ComponentActivity() {
                                 getExternalFilesDir(null)?.absolutePath ?: "Папка недоступна",
                                 focusToken = orientation, touchMode = BuildConfig.PHONE_PREVIEW, appliedSchedule = appliedSchedule,
                                 iqamahCalendarNotice = if (iqamah.config.rules.any { it.baseCalendar != null }) "Икамат хранится отдельно. Проверьте базовые поля нового календаря: прежние подтверждения действуют только для того же файла. Несовместимые относительные правила приостановлены." else null,
+                                calendar = mosqueCalendar, calendarCandidate = calendarCandidate,
+                                onApplyCalendar = vm::applyCalendar, onCancelCalendar = vm::dismissCalendarCandidate,
+                                onRollbackCalendar = vm::rollbackCalendar, calendarDiagnostic = calendarDiagnostic ?: calendarBoundaryNotice ?: if(!legacyCompatible && (iqamah.config.rules.isNotEmpty() || ramadan.config.dates.isNotEmpty())) "Прежние ручные настройки относятся к другому месту. Загрузите календарь выбранной мечети." else null,
                                 onIqamah = { iqamahOpen = true },
                                 onRamadan = { ramadanOpen = true },
                                 onImportFolder = { if (folderTree == null) chooseFolder() else folderOpen = true },
@@ -283,6 +321,7 @@ class MainActivity : ComponentActivity() {
                                     admin = false
                                     vm.cancelPendingImport()
                                     vm.dismissCandidate()
+                                    vm.dismissCalendarCandidate()
                                     vm.dismissMessage()
                                 })
                             if (folderOpen && admin && !setupOpen && folderTree != null) ImportFolderScreen(folderTree!!, BuildConfig.PHONE_PREVIEW,
@@ -337,30 +376,6 @@ class MainActivity : ComponentActivity() {
                         }
                         if (BuildConfig.PHONE_PREVIEW) {
                             Column(Modifier.fillMaxSize()) {
-                                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Нур Ислам · тест", color = LocalBoardAppearance.current.Secondary,
-                                        fontSize = 14.sp, modifier = Modifier.weight(1f))
-                                    TextButton(onClick = {
-                                        orientation = null
-                                        if (admin) {
-                                            admin = false
-                                            vm.cancelPendingImport()
-                                            vm.dismissCandidate()
-                                            vm.dismissMessage()
-                                        } else {
-                                            admin = true
-                                        }
-                                    }, enabled = !iqamahOpen, modifier = Modifier.testTag("phone-settings")) {
-                                        Text(if (admin) "Табло" else "Настройки", color = LocalBoardAppearance.current.Gold, fontSize = 16.sp)
-                                    }
-                                }
-                                if ((testSchedule || demoIqamah) && !admin && !setupOpen) {
-                                    Text(listOfNotNull(if (testSchedule) "ТЕСТОВОЕ РАСПИСАНИЕ" else null, if (demoIqamah) "ТЕСТОВЫЙ ИКАМАТ" else null).joinToString(" · "), color = LocalBoardAppearance.current.Deep,
-                                        fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                        modifier = Modifier.fillMaxWidth().background(LocalBoardAppearance.current.Gold)
-                                            .padding(horizontal = 12.dp, vertical = 8.dp).testTag("test-schedule-banner"))
-                                }
                                 Box(Modifier.weight(1f).fillMaxWidth()) {
                                     PhoneBoardViewport(mode) {
                                         RotatedBoard(mode, Modifier.fillMaxSize(), board)

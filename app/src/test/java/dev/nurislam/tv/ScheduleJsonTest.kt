@@ -23,8 +23,8 @@ class ScheduleJsonTest {
         rejected { it.getAsJsonArray("days")[0].asJsonObject.addProperty("date", "2026-02-29") }
     }
     @Test fun everyRequiredFieldIsValidated() {
-        for (key in listOf("schemaVersion", "year", "source", "revision", "locationId", "locationName", "timezone", "approved", "days")) rejected { it.remove(key) }
-        rejected { it.addProperty("timezone", "UTC") }
+        for (key in listOf("schemaVersion", "year", "source", "revision", "locationId", "locationName", "timezone", "days")) rejected { it.remove(key) }
+        rejected { it.addProperty("timezone", "Invalid/City") }
         rejected { it.addProperty("schemaVersion", 2) }
         rejected { it.addProperty("approved", "true") }
         rejected { it.addProperty("year", 2026.1) }

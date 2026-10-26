@@ -79,10 +79,8 @@ class LocalScheduleRepository(private val storage: ScheduleStorage) : ScheduleRe
     } }
 
     override suspend fun apply(candidate: ValidatedSchedule) = withContext(Dispatchers.IO) { mutex.withLock {
-        require(candidate.metadata.approved) { "Неутверждённое расписание нельзя применить" }
         // Revalidate at the mutation boundary, including candidates supplied by internal callers.
         val checked = ScheduleJson.parse(candidate.json.toByteArray(Charsets.UTF_8))
-        require(checked.metadata.approved) { "Неутверждённое расписание нельзя применить" }
         val old = mutable.value
         check(old.loaded) { "Расписание ещё загружается" }
         storage.write(encode(checked, old.current))
@@ -112,7 +110,7 @@ class LocalScheduleRepository(private val storage: ScheduleStorage) : ScheduleRe
             val obj = value.asJsonObject
             val json = obj.get("json").asString
             check(hash(json) == obj.get("sha256").asString)
-            ScheduleJson.parse(json.toByteArray(Charsets.UTF_8)).also { check(it.metadata.approved) }
+            ScheduleJson.parse(json.toByteArray(Charsets.UTF_8))
         }.getOrNull()
     }
     private fun decode(bytes: ByteArray): ScheduleState {

@@ -16,7 +16,7 @@ data class AppSettings(
     val theme: BoardThemeId = BoardThemeId.ELEGANT,
     val displayMode: DisplayMode = DisplayMode.AUTO,
     val textScale: Float = 1f,
-    val language: BoardLanguage = BoardLanguage.BOTH,
+    val language: BoardLanguage = BoardLanguage.RUSSIAN,
     val mosqueName: String = "Нур Ислам",
     val location: String = "Казан · Казань",
 ) {
@@ -36,7 +36,7 @@ class SettingsRepository(private val preferences: SharedPreferences) {
     private fun read(): AppSettings = runCatching {
         AppSettings(
             enum("theme", BoardThemeId.ELEGANT), enum("mode", DisplayMode.AUTO),
-            preferences.getFloat("scale", 1f), enum("language", BoardLanguage.BOTH),
+            preferences.getFloat("scale", 1f), enum("language", BoardLanguage.RUSSIAN),
             preferences.getString("name", "Нур Ислам")!!, preferences.getString("location", "Казан · Казань")!!,
         )
     }.getOrDefault(AppSettings())

@@ -39,137 +39,63 @@ internal val ImportActionHighlighted = SemanticsPropertyKey<Boolean>("ImportActi
 fun isTestScheduleSource(source: String): Boolean = dev.nurislam.tv.data.isTestSource(source)
 
 @Composable
-fun ScheduleImportPreview(
-    candidate: ValidatedSchedule,
-    schedules: ScheduleState,
-    busy: Boolean,
-    touchMode: Boolean,
-    onApply: () -> Unit,
-    onCancel: () -> Unit,
-) {
-    var confirmed by remember(candidate) { mutableStateOf(false) }
-    var selection by remember(candidate) { mutableIntStateOf(0) } // Cancel is the safe initial action.
+fun ScheduleImportPreview(candidate: ValidatedSchedule, schedules: ScheduleState, busy: Boolean, touchMode: Boolean,
+    onApply: () -> Unit, onCancel: () -> Unit) {
+    val today = Instant.now().atZone(candidate.metadata.timezone).toLocalDate()
+    val date = candidate.days.keys.firstOrNull { it == today } ?: candidate.days.keys.minOrNull()!!
+    val details = buildString {
+        append("Источник: ${candidate.metadata.source}\nВерсия данных: ${candidate.metadata.revision}\n\nВремена на $date — без корректировок\n")
+        val names = listOf("Завершение сухура", "Фаджр / в мечети", "Восход", "Зенит", "Зухр", "Аср", "Магриб", "Иша")
+        ScheduleEvent.entries.forEachIndexed { i, e -> append("${names[i]}    ${formatTime(candidate.day(date)!!.times.getValue(e))}\n") }
+        if (candidate.fajrMeaning == dev.nurislam.tv.data.FajrMeaning.UNCONFIRMED) append("\nФайл не уточняет начало Фаджра. Отсчёт от него не используется.\n")
+        candidate.excelNotice?.let { append("\n$it") }
+    }
+    DocumentPreview("Проверка расписания", "${candidate.mosqueName ?: candidate.locationName}\n${candidate.locationName} · ${candidate.metadata.timezone.id}\n${candidate.metadata.year} год · ${candidate.days.size} дней",
+        details, isTestScheduleSource(candidate.metadata.source), busy, touchMode, onApply, onCancel,
+        warning = if (candidate.metadata.year != today.year) "Файл на ${candidate.metadata.year} год. Для сегодняшнего табло нужно расписание на ${today.year}." else null,
+        tag = "import")
+}
+
+/** Content scrolls independently; Apply and Cancel remain visible on short phone windows. */
+@Composable
+internal fun DocumentPreview(title: String, summary: String, details: String, demo: Boolean, busy: Boolean,
+    touch: Boolean, onApply: () -> Unit, onCancel: () -> Unit, warning: String? = null, tag: String = "calendar") {
+    var expanded by remember(title, summary) { mutableStateOf(false) }
+    var selection by remember(title, summary) { mutableIntStateOf(2) }
     val focus = remember { FocusRequester() }
-    val scroll = rememberScrollState()
-    val scope = rememberCoroutineScope()
-    val testSource = isTestScheduleSource(candidate.metadata.source)
-    val phoneTest = testSource && BuildConfig.PHONE_PREVIEW
-    val excel = candidate.excelNotice != null
-    val eligible = (candidate.metadata.approved || excel) && (!testSource || phoneTest)
-    val canApply = eligible && confirmed && !busy
-    fun apply() { if (canApply) onApply() }
-    fun cancel() { if (!busy) onCancel() }
-    LaunchedEffect(candidate) { focus.requestFocus() }
-    BackHandler { cancel() }
-    val today = Instant.now().atZone(MoscowZone).toLocalDate()
-    val date = if (candidate.days.containsKey(today)) today else candidate.days.keys.minOrNull()!!
-    val incoming = candidate.day(date)!!
-    val current = schedules.scheduleFor(date)?.day(date)
-    BoxWithConstraints(Modifier.fillMaxSize().background(LocalBoardAppearance.current.Deep).testTag("import-preview")
-        .onPreviewKeyEvent { event ->
-            val key = event.nativeKeyEvent
-            val handled = key.keyCode in listOf(KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
-                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
-            if (handled && key.action == KeyEvent.ACTION_DOWN) when (key.keyCode) {
-                KeyEvent.KEYCODE_BACK -> cancel()
+    val scroll = rememberScrollState(); val scope = rememberCoroutineScope()
+    LaunchedEffect(title, summary) { focus.requestFocus() }
+    BackHandler { if (!busy) onCancel() }
+    val c = LocalBoardAppearance.current
+    BoxWithConstraints(Modifier.fillMaxSize().background(c.Deep).testTag("$tag-preview")
+        .onPreviewKeyEvent { e ->
+            val k = e.nativeKeyEvent
+            val handled = k.keyCode in listOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BACK)
+            if (handled && k.action == KeyEvent.ACTION_DOWN && !busy) when (k.keyCode) {
+                KeyEvent.KEYCODE_BACK -> onCancel()
                 KeyEvent.KEYCODE_DPAD_DOWN -> selection = (selection + 1) % 3
                 KeyEvent.KEYCODE_DPAD_UP -> selection = (selection + 2) % 3
-                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> scope.launch {
-                    scroll.animateScrollBy(scroll.viewportSize * if (key.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) .7f else -.7f)
-                }
-                else -> when (selection) {
-                    0 -> cancel()
-                    1 -> if (eligible && !busy) confirmed = !confirmed
-                    2 -> apply()
-                }
-            }
-            handled
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> scope.launch { scroll.animateScrollBy(scroll.viewportSize * if (k.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) .7f else -.7f) }
+                else -> when (selection) { 0 -> expanded = !expanded; 1 -> onCancel(); else -> onApply() }
+            }; handled
         }.focusRequester(focus).focusable()) {
-        val s = if (touchMode) .5f else minOf(maxWidth.value / 1080f, maxHeight.value / 1080f)
-        val colors = LocalBoardAppearance.current
-        val shape = RoundedCornerShape(8.dp)
-        fun actionModifier(index: Int, tag: String) = Modifier.semantics(mergeDescendants = true) { this[ImportActionHighlighted] = selection == index }.testTag(tag)
-            .border(if (selection == index) 2.dp else 0.dp, if (selection == index) colors.Gold else colors.Deep, shape)
-        Column(Modifier.fillMaxSize().padding(if (touchMode) 12.dp else (32 * s).dp)) {
-            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).testTag("import-information")) {
-                Text("Проверка расписания", color = colors.Gold, fontSize = (40 * s).sp, fontWeight = FontWeight.Bold)
-                Text("${candidate.metadata.year} год · ${candidate.days.size} дней", color = colors.Text, fontSize = (30 * s).sp)
-                Text("Источник: ${candidate.metadata.source}", color = colors.Text, fontSize = (26 * s).sp,
-                    modifier = Modifier.padding(vertical = 8.dp))
-                if (testSource || !candidate.metadata.approved) {
-                    Text(if (testSource) "ТЕСТОВЫЙ ИСТОЧНИК — НЕ ОФИЦИАЛЬНЫЙ КАЛЕНДАРЬ" else "ИСТОЧНИК НЕ УТВЕРЖДЁН",
-                        color = colors.Gold, fontWeight = FontWeight.Bold, fontSize = (28 * s).sp, modifier = Modifier.testTag("import-source-warning"))
-                }
-                Text("${candidate.locationName} · Europe/Moscow\nРевизия: ${candidate.metadata.revision} · approved=${candidate.metadata.approved}\nСмысл Фаджра: ${candidate.fajrMeaning}",
-                    color = colors.Secondary, fontSize = (24 * s).sp)
-                candidate.excelNotice?.let { Text(it, color = colors.Gold, fontSize = (24 * s).sp, modifier = Modifier.testTag("import-excel-notice")) }
-                Text("Времена на $date — без корректировок", color = colors.Text, fontSize = (28 * s).sp,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
-                Row(Modifier.fillMaxWidth()) {
-                    Text("Событие", color = colors.Secondary, fontSize = (24 * s).sp, modifier = Modifier.weight(1f))
-                    Text("Было", color = colors.Secondary, fontSize = (24 * s).sp, modifier = Modifier.width((108 * s).dp))
-                    Text("Из файла", color = colors.Gold, fontSize = (24 * s).sp, modifier = Modifier.width((116 * s).dp))
-                }
-                ScheduleEvent.entries.forEach { event ->
-                    HorizontalDivider(color = colors.Outline.copy(alpha = .35f))
-                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp).testTag("import-row-${event.name}"), verticalAlignment = Alignment.CenterVertically) {
-                        val labels = eventLabels(event)
-                        Column(Modifier.weight(1f)) {
-                            Text(stringResource(labels.first), color = colors.Text, fontSize = (26 * s).sp)
-                            Text(stringResource(labels.second), color = colors.Secondary, fontSize = (22 * s).sp)
-                        }
-                        Text(current?.times?.get(event)?.let(::formatTime) ?: "—", color = colors.Secondary,
-                            fontSize = (28 * s).sp, modifier = Modifier.width((108 * s).dp))
-                        Text(formatTime(incoming.times.getValue(event)), color = colors.Gold, fontWeight = FontWeight.Bold,
-                            fontSize = (28 * s).sp, modifier = Modifier.width((116 * s).dp))
-                    }
-                }
-                Text("Сверьте источник, особенно Фаджр и Иша. approved=true и конвертация из Excel сами по себе не подтверждают утверждение мечетью.",
-                    color = colors.Secondary, fontSize = (24 * s).sp, modifier = Modifier.padding(vertical = 8.dp))
-                if (schedules.scheduleFor(today) != null && dev.nurislam.tv.data.ScheduleState(candidate, schedules.current, loaded = true).scheduleFor(today) == null) {
-                    Text("После импорта календарь на текущую дату будет вытеснен: хранятся только два последних импорта. Сначала сохраните нужные исходные файлы. При отсутствии года табло покажет отсутствие данных.",
-                        color = colors.Gold, fontSize = (24 * s).sp, modifier = Modifier.testTag("import-displaces-current-year"))
-                }
-                if (candidate.metadata.year != today.year) Text("Год отличается от даты устройства. Без календаря на текущий год табло не покажет времена.",
-                    color = colors.Gold, fontSize = (24 * s).sp)
+        val s = if (touch) .5f else minOf(maxWidth.value / 1080f, maxHeight.value / 1080f)
+        fun action(i: Int, name: String) = Modifier.testTag("$tag-$name").semantics { this[ImportActionHighlighted] = selection == i }
+            .border(if (selection == i) 2.dp else 0.dp, c.Gold, RoundedCornerShape(8.dp))
+        Column(Modifier.fillMaxSize().padding(if (touch) 16.dp else (32*s).dp)) {
+            Column(Modifier.weight(1f).verticalScroll(scroll).testTag("$tag-information")) {
+                Text(title, color = c.Gold, fontSize = (38*s).sp, fontWeight = FontWeight.Bold)
+                Text(summary, color = c.Text, fontSize = (30*s).sp, modifier = Modifier.padding(vertical = 12.dp))
+                if (demo) Text("ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ · для проверки интерфейса", color = c.Gold, fontSize = (26*s).sp, modifier = Modifier.testTag("$tag-source-warning"))
+                if (warning != null) Text(warning, color = c.Gold, fontSize = (26*s).sp)
+                Text("Данные будут показаны как в выбранном файле.", color = c.Secondary, fontSize = (24*s).sp)
+                if (expanded) Text(details, color = c.Text, fontSize = (26*s).sp, modifier = Modifier.padding(vertical = 12.dp))
             }
-            HorizontalDivider(color = colors.Outline, modifier = Modifier.padding(vertical = 8.dp))
-            Column(Modifier.fillMaxWidth().testTag("import-actions")) {
-                Row(actionModifier(1, "import-confirmation").fillMaxWidth()
-                    .toggleable(value = confirmed, role = Role.Checkbox, enabled = eligible && !busy) { confirmed = it }
-                    .heightIn(min = 48.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = confirmed, onCheckedChange = null, enabled = eligible && !busy,
-                        colors = CheckboxDefaults.colors(checkedColor = colors.Gold, checkmarkColor = colors.Deep, uncheckedColor = colors.Secondary))
-                    Text(if (phoneTest) "Понимаю: тестовое расписание не утверждено мечетью" else "Подтверждаю: источник утверждён мечетью", color = if (eligible) colors.Text else colors.Secondary,
-                        fontSize = (28 * s).sp, modifier = Modifier.padding(start = 8.dp))
-                }
-                Text(when {
-                    !candidate.metadata.approved && !excel -> "Применение запрещено: approved=false. Нужен утверждённый файл."
-                    testSource && !phoneTest -> "Тестовый файл можно просмотреть, но нельзя применить для работы мечети."
-                    busy -> "Применение расписания…"
-                    phoneTest -> if (confirmed) "Будет применено только для демонстрации, не для работы мечети."
-                        else "Для демонстрации подтвердите, что понимаете тестовый статус."
-                    !confirmed -> "Сначала подтвердите источник выше."
-                    else -> if (schedules.current != null) "Готово к применению. Текущая версия сохранится для отката."
-                        else "Готово к применению. Первый календарь будет сохранён."
-                }, color = colors.Secondary, fontSize = (24 * s).sp, modifier = Modifier.padding(vertical = 4.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = ::cancel, enabled = !busy, shape = shape,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.Gold),
-                        modifier = actionModifier(0, "import-cancel").weight(1f).heightIn(min = 48.dp)) {
-                        Text("Отменить", fontSize = (28 * s).sp)
-                    }
-                    Button(onClick = ::apply, enabled = canApply, shape = shape,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = colors.Gold, contentColor = colors.Deep,
-                            disabledContainerColor = colors.Secondary.copy(alpha = .16f), disabledContentColor = colors.Secondary.copy(alpha = .5f)),
-                        modifier = actionModifier(2, "import-apply").weight(2f).heightIn(min = 48.dp)) {
-                        Text("Применить расписание", fontSize = (28 * s).sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-                if (!touchMode) Text("↑↓ — действия · ←→ — прокрутка · OK — выбрать · BACK — отмена",
-                    color = colors.Secondary, fontSize = (22 * s).sp)
+            OutlinedButton(onClick = { expanded = !expanded }, modifier = action(0, "details").fillMaxWidth(), enabled = !busy) { Text(if (expanded) "Скрыть подробности" else "Подробности", color = c.Gold, fontSize = (28*s).sp) }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onCancel, enabled = !busy, modifier = action(1, "cancel").weight(1f).heightIn(min = 48.dp)) { Text("Отмена", color = c.Gold, fontSize = (28*s).sp) }
+                Button(onClick = onApply, enabled = !busy, colors = ButtonDefaults.buttonColors(containerColor = c.Gold, contentColor = c.Deep),
+                    modifier = action(2, "apply").weight(1f).heightIn(min = 48.dp)) { Text(if (busy) "Применение…" else "Применить", fontWeight = FontWeight.Bold, fontSize = (28*s).sp) }
             }
         }
     }

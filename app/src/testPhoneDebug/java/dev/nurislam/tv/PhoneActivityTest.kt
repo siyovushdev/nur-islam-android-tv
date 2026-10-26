@@ -32,7 +32,7 @@ class PhoneActivityTest {
         compose.waitUntil(10_000) { !androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java].busy.value }
         compose.waitForIdle()
     }
-    private fun openSettings() { compose.onNodeWithTag("phone-settings").performClick() }
+    private fun openSettings() { compose.onNodeWithTag("board-settings").performClick() }
     private fun tap(text: String) {
         compose.onNodeWithTag("admin-list").performScrollToNode(hasText(text))
         compose.onNodeWithText(text).performClick()
@@ -60,33 +60,29 @@ class PhoneActivityTest {
         assertFalse(info.requestedPermissions.orEmpty().contains("android.permission.INTERNET"))
         assertEquals(0, compose.activity.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN)
         assertEquals(0, compose.activity.window.decorView.systemUiVisibility and android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
-        compose.onNodeWithTag("phone-settings").assertIsDisplayed()
+        compose.onNodeWithTag("board-settings").assertIsDisplayed()
         compose.onNodeWithText("Пропустить и открыть табло").assertDoesNotExist()
         openSettings()
-        compose.onNodeWithTag("admin-list").performScrollToIndex(9)
+        compose.onNodeWithText("Запуск при включении телевизора").assertDoesNotExist()
         compose.onNodeWithText("Основной экран HOME / безопасный выход").assertDoesNotExist()
         compose.onNodeWithText("Мастер HOME / kiosk").assertDoesNotExist()
     }
     @Test fun touchThemeScaleAndKeyboardPersistAfterActivityRecreation() {
         openSettings()
-        tap("Тема: ELEGANT")
+        tap("Внешний вид"); tap("Тема: ELEGANT")
         assertEquals(BoardThemeId.CLASSIC, app.settings.state.value.theme)
         tap("Масштаб текста: 100%")
         assertEquals(1.15f, app.settings.state.value.textScale)
-        tap("Название: Нур Ислам")
-        compose.onNodeWithTag("label-value").performTextReplacement("Телефон · тест")
-        compose.onNodeWithText("Сохранить").performClick(); waitIo()
-        assertEquals("Телефон · тест", app.settings.state.value.mosqueName)
         screenshot("settings")
         compose.activityRule.scenario.recreate()
         val saved = SettingsRepository(app.getSharedPreferences("display", 0)).state.value
         assertEquals(app.settings.state.value, saved)
         openSettings()
-        compose.onNodeWithText("Тема: CLASSIC").assertIsDisplayed()
+        tap("Внешний вид"); compose.onNodeWithText("Тема: CLASSIC").assertIsDisplayed()
     }
     @Test fun touchOrientationCanBeCancelledConfirmedOrTimedOut() {
         openSettings()
-        tap("Ориентация: AUTO")
+        tap("Внешний вид"); tap("Ориентация экрана")
         val cw = app.getString(R.string.mode_cw)
         tap(cw)
         compose.onNodeWithText("Вернуть прежний режим").performClick()
@@ -117,7 +113,7 @@ class PhoneActivityTest {
             for (mode in DisplayMode.entries) for (scale in listOf(.85f, 1f, 1.15f)) {
                 runBlocking { app.settings.update { it.copy(theme = theme, displayMode = mode, textScale = scale) } }
                 compose.waitForIdle()
-                compose.onNodeWithTag("test-schedule-banner").assertIsDisplayed()
+                compose.onNodeWithTag("board-notice").assertIsDisplayed()
                 val viewport = compose.onNodeWithTag("phone-viewport").fetchSemanticsNode().boundsInRoot
                 val board = compose.onNodeWithTag("prayer-board").fetchSemanticsNode().boundsInRoot
                 assertTrue("$theme / $mode / $scale: board left", board.left >= viewport.left - 1f)
@@ -133,7 +129,7 @@ class PhoneActivityTest {
     @Test fun pendingSafResultReopensPreviewAfterActivityRecreationWithoutAutoApply() {
         val year = Instant.now().atZone(MoscowZone).year
         val file = File(app.cacheDir, "pending-calendar.json").apply { writeText(ScheduleFixtures.json(year, "pending-saf").toString()) }
-        openSettings(); tap("Расписание"); tap("Импорт JSON / XLSX — выбрать файл")
+        openSettings(); tap("Загрузить расписание")
         val request = shadowOf(compose.activity).nextStartedActivityForResult
         assertEquals(Intent.ACTION_OPEN_DOCUMENT, request.intent.action)
         compose.activityRule.scenario.recreate()
@@ -144,7 +140,7 @@ class PhoneActivityTest {
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java]
         compose.waitUntil(10_000) { shadowOf(android.os.Looper.getMainLooper()).idle(); vm.candidate.value != null && !vm.busy.value }
         compose.onNodeWithTag("import-preview").assertIsDisplayed()
-        compose.onNodeWithTag("import-apply").assertIsNotEnabled()
+        compose.onNodeWithTag("import-apply").assertIsEnabled()
         assertNull(app.schedules.state.value.current)
         file.delete()
     }
@@ -153,30 +149,29 @@ class PhoneActivityTest {
         val year = Instant.now().atZone(MoscowZone).year
         shadowOf(app.contentResolver).registerInputStream(uri, ScheduleFixtures.json(year, "phone-one", meaning = "PRAYER_START").apply { addProperty("source", "Календарь мечети, протокол 42") }.toString().byteInputStream())
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java]
-        openSettings(); tap("Расписание")
+        openSettings()
         compose.runOnIdle { vm.import(uri) }; waitIo()
-        compose.onNodeWithTag("import-confirmation").performClick()
         compose.onNodeWithTag("import-apply").performClick(); waitIo()
         assertEquals("phone-one", app.schedules.state.value.current!!.metadata.revision)
         compose.onNodeWithText("Вернуться к табло").performClick()
         compose.onNodeWithTag("row-ASR").assert(hasAnyDescendant(hasText("15:15")))
         runBlocking { app.schedules.apply(ScheduleFixtures.schedule(year, "phone-two", asr = "16:00")) }
         compose.onNodeWithTag("row-ASR").assert(hasAnyDescendant(hasText("16:00")))
-        openSettings(); tap("Расписание"); tap("Откат к предыдущему расписанию"); tap("Подтвердить откат")
-        compose.onNodeWithTag("phone-settings").performClick()
+        openSettings(); tap("Загруженные данные"); tap("Вернуть предыдущее расписание")
+        compose.onNodeWithText("Вернуться к табло").performClick()
         compose.onNodeWithTag("row-ASR").assert(hasAnyDescendant(hasText("15:15")))
     }
     @Test fun cancellingPhonePreviewLeavesRepositoryUntouched() {
         val uri = android.net.Uri.parse("content://test.documents/cancel-calendar.json")
         shadowOf(app.contentResolver).registerInputStream(uri, ScheduleFixtures.json().toString().byteInputStream())
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java]
-        openSettings(); tap("Расписание")
+        openSettings()
         compose.runOnIdle { vm.import(uri) }; waitIo()
         compose.onNodeWithTag("import-preview").assertIsDisplayed()
         compose.onNodeWithTag("import-cancel").performClick()
         assertNull(vm.candidate.value)
         assertNull(app.schedules.state.value.current)
-        compose.onNodeWithText("Импорт JSON / XLSX — выбрать файл").assertIsDisplayed()
+        compose.onNodeWithText("Загрузить расписание").assertIsDisplayed()
     }
 
     @Test fun phoneTestJsonCanBeAppliedWithPersistentBannerAfterRecreation() {
@@ -187,30 +182,29 @@ class PhoneActivityTest {
         }
         shadowOf(app.contentResolver).registerInputStream(uri, json.toString().byteInputStream())
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java]
-        openSettings(); tap("Расписание")
+        openSettings()
         compose.runOnIdle { vm.import(uri) }; waitIo()
-        compose.onNodeWithTag("import-apply").assertIsNotEnabled()
+        compose.onNodeWithTag("import-apply").assertIsEnabled()
         compose.onNodeWithText("Подтверждаю: источник утверждён мечетью").assertDoesNotExist()
-        compose.onNodeWithText("Понимаю: тестовое расписание не утверждено мечетью").performClick()
         compose.onNodeWithTag("import-apply").assertIsEnabled().performClick(); waitIo()
         assertEquals("ТЕСТ ДЛЯ ТЕЛЕФОНА", app.schedules.state.value.current!!.metadata.source)
-        compose.onNodeWithText("Тестовое расписание применено").assertIsDisplayed()
+        compose.onNodeWithText("Расписание применено. Табло обновлено.").assertIsDisplayed()
         compose.onNodeWithText("Вернуться к табло").performClick()
-        compose.onNodeWithTag("test-schedule-banner").assertIsDisplayed().assertTextEquals("ТЕСТОВОЕ РАСПИСАНИЕ")
+        compose.onNodeWithTag("board-notice").assertIsDisplayed().assert(hasAnyDescendant(hasText("ТЕСТОВОЕ РАСПИСАНИЕ", substring = true)))
         compose.onNodeWithTag("row-ASR").assert(hasAnyDescendant(hasText("15:15")))
         compose.mainClock.advanceTimeBy(20_000)
-        compose.onNodeWithTag("test-schedule-banner").assertIsDisplayed()
+        compose.onNodeWithTag("board-notice").assertIsDisplayed()
         compose.activityRule.scenario.recreate()
-        compose.onNodeWithTag("test-schedule-banner").assertIsDisplayed()
+        compose.onNodeWithTag("board-notice").assertIsDisplayed()
         compose.onNodeWithTag("row-ASR").assert(hasAnyDescendant(hasText("15:15")))
-        screenshot("test-schedule-banner")
+        screenshot("board-notice")
     }
 
     @Test fun iqamahEditorSavesThroughActualViewModelAndRestoresAfterRecreation() {
         val year = Instant.now().atZone(MoscowZone).year
         runBlocking { app.schedules.apply(ScheduleFixtures.schedule(year, meaning = "PRAYER_START")) }
         compose.waitUntil(10_000) { app.iqamah.state.value.loaded }
-        openSettings(); tap("Икамат")
+        openSettings(); tap("Для специалиста"); tap("Ручной икамат (прежний способ)")
         compose.onNodeWithTag("prayer-board").assertDoesNotExist()
         fun iqaTap(text: String) {
             compose.onNodeWithTag("iqamah-list").performScrollToNode(hasText(text))
@@ -225,14 +219,14 @@ class PhoneActivityTest {
         iqaTap("Подтвердить сохранение")
         compose.onNodeWithText("Правила сохранены").assertIsDisplayed()
         iqaTap("Вернуться к табло")
-        compose.onNodeWithTag("test-schedule-banner").assertTextContains("ТЕСТОВЫЙ ИКАМАТ", substring = true)
+        compose.onNodeWithTag("board-notice").assert(hasAnyDescendant(hasText("ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ", substring = true)))
         assertEquals(990, app.iqamah.state.value.config.rules.single().value)
         val repo = dev.nurislam.tv.iqamah.IqamahRepository(dev.nurislam.tv.data.AtomicScheduleStorage(File(app.filesDir, "iqamah-store.json")))
         runBlocking { repo.load() }
         assertEquals(app.iqamah.state.value.config, repo.state.value.config)
         compose.activityRule.scenario.recreate()
-        compose.onNodeWithTag("test-schedule-banner").assertTextContains("ТЕСТОВЫЙ ИКАМАТ", substring = true)
-        openSettings(); tap("Икамат")
+        compose.onNodeWithTag("board-notice").assert(hasAnyDescendant(hasText("ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ", substring = true)))
+        openSettings(); tap("Для специалиста"); tap("Ручной икамат (прежний способ)")
         iqaTap("Сегодня: начало / икамат / правило")
         compose.onNodeWithText("Начало: не подтверждено · Икамат: 16:30", substring = true).performScrollTo().assertIsDisplayed()
         screenshot("iqamah-today")

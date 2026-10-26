@@ -22,86 +22,55 @@ import java.time.LocalDate
 @RunWith(AndroidJUnit4::class)
 class MainActivityTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
-    @org.junit.Before fun completeInitialSetup() {
-        // Existing board/settings scenarios begin after the separately tested first-run wizard.
-        compose.onNodeWithText("Пропустить и открыть табло").performClick()
-    }
+    @org.junit.Before fun completeInitialSetup() { compose.onNodeWithTag("device-setup").assertDoesNotExist() }
     private val app get() = compose.activity.application as NurIslamApplication
     private fun key(key: Key, count: Int = 1) { compose.onRoot().performKeyInput { repeat(count) { pressKey(key) } } }
-    private fun settings() {
-        key(Key.DirectionCenter, 5)
-        compose.onNodeWithText("Вход в настройки").assertIsDisplayed()
-        key(Key.DirectionDown); key(Key.Enter)
-        compose.onNodeWithText("Тема: ELEGANT").assertIsDisplayed()
-    }
+    private fun settings() { key(Key.DirectionCenter); compose.onNodeWithText("Загрузить расписание").assertIsDisplayed() }
+    private fun tap(text: String) { compose.onNodeWithTag("admin-list").performScrollToNode(hasText(text)); compose.onNodeWithText(text).performClick(); waitIo() }
+    private fun orientation() { settings(); tap("Внешний вид"); tap("Ориентация экрана"); tap(app.getString(R.string.mode_native)) }
     private fun waitIo() { compose.waitUntil(10_000) { !androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java].busy.value }; compose.waitForIdle() }
 
     @Test fun releaseRemoteEntryThemePersistsAfterRecreate() {
-        settings()
-        key(Key.DirectionDown); key(Key.Enter); waitIo()
-        compose.onNodeWithText("Тема: CLASSIC").assertIsDisplayed()
-        assertEquals(BoardThemeId.CLASSIC, app.settings.state.value.theme)
-        key(Key.Back)
-        compose.activityRule.scenario.recreate()
-        assertEquals(BoardThemeId.CLASSIC, app.settings.state.value.theme)
-        key(Key.DirectionCenter, 5); key(Key.DirectionDown); key(Key.Enter)
+        settings(); key(Key.DirectionDown, 2); key(Key.Enter); key(Key.Enter); waitIo()
+        assertEquals(BoardThemeId.CLASSIC,app.settings.state.value.theme)
+        key(Key.Back); key(Key.Back)
+        compose.onNodeWithTag("admin-panel").assertDoesNotExist()
+        compose.activityRule.scenario.recreate(); settings(); tap("Внешний вид")
         compose.onNodeWithText("Тема: CLASSIC").assertIsDisplayed()
     }
 
     @Test fun orientationIsNotSavedWithoutConfirmationAndSurvivesOnlyWhenConfirmed() {
-        settings()
-        key(Key.DirectionDown, 2); key(Key.Enter); key(Key.DirectionDown); key(Key.Enter)
-        compose.onNodeWithTag("orientation-confirm").assertIsDisplayed()
-        assertEquals("AUTO", app.settings.state.value.displayMode.name)
-        key(Key.Back)
-        compose.onNodeWithTag("orientation-confirm").assertDoesNotExist()
-        key(Key.Enter)
+        orientation(); assertEquals("AUTO",app.settings.state.value.displayMode.name)
+        key(Key.Back); compose.onNodeWithTag("orientation-confirm").assertDoesNotExist()
+        key(Key.Enter); compose.onNodeWithTag("orientation-confirm").assertIsDisplayed()
         key(Key.DirectionDown); key(Key.Enter); waitIo()
-        compose.waitUntil(5_000) { app.settings.state.value.displayMode.name == "PORTRAIT_NATIVE" }
-        compose.activityRule.scenario.recreate()
-        assertEquals("PORTRAIT_NATIVE", app.settings.state.value.displayMode.name)
+        assertEquals("PORTRAIT_NATIVE",app.settings.state.value.displayMode.name)
+        compose.activityRule.scenario.recreate(); assertEquals("PORTRAIT_NATIVE",app.settings.state.value.displayMode.name)
     }
 
     @Test fun orientationTimeoutAndRecreateReturnToConfirmedMode() {
-        settings(); key(Key.DirectionDown, 2); key(Key.Enter); key(Key.DirectionDown); key(Key.Enter)
-        shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofSeconds(16))
-        compose.mainClock.advanceTimeBy(16_000)
-        compose.onNodeWithTag("orientation-confirm").assertDoesNotExist()
-        assertEquals("AUTO", app.settings.state.value.displayMode.name)
-        // The settings root must regain D-pad focus after timeout.
-        key(Key.Enter)
-        compose.onNodeWithTag("orientation-confirm").assertIsDisplayed()
-        compose.activityRule.scenario.recreate()
-        compose.onNodeWithTag("orientation-confirm").assertDoesNotExist()
-        assertEquals("AUTO", app.settings.state.value.displayMode.name)
+        orientation(); shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofSeconds(16)); compose.mainClock.advanceTimeBy(16_000)
+        compose.onNodeWithTag("orientation-confirm").assertDoesNotExist(); assertEquals("AUTO",app.settings.state.value.displayMode.name)
+        key(Key.Enter); compose.onNodeWithTag("orientation-confirm").assertIsDisplayed()
+        compose.activityRule.scenario.recreate(); assertEquals("AUTO",app.settings.state.value.displayMode.name)
     }
 
-    @Test fun inboxPreviewConfirmationAndRollbackUpdateRepositoryWithoutRestart() {
+    @Test fun inboxPreviewApplyAndRollbackUpdateRepositoryWithoutRestart() {
         compose.waitUntil(5_000) { app.schedules.state.value.loaded }
-        val year = Instant.now().atZone(dev.nurislam.tv.model.MoscowZone).year.coerceIn(2000, 2200)
-        val file = java.io.File(app.getExternalFilesDir(null), "incoming-schedule.json")
-        file.writeText(ScheduleFixtures.json(year, "revision-one", meaning = "PRAYER_START").apply { addProperty("source", "Календарь мечети, протокол 42") }.toString())
-        settings()
-        key(Key.DirectionDown, 7); key(Key.Enter)
-        key(Key.DirectionDown, 2); key(Key.Enter); waitIo()
-        compose.onNodeWithText("Подтверждаю: источник утверждён мечетью").assertIsDisplayed()
-        assertNull(app.schedules.state.value.current)
-        key(Key.DirectionDown); key(Key.Enter)
-        key(Key.DirectionDown); key(Key.Enter); waitIo()
-        assertEquals("revision-one", app.schedules.state.value.current!!.metadata.revision)
-        compose.onNodeWithText("К расписанию").performClick()
-        file.writeText(ScheduleFixtures.json(year, "revision-two", asr = "16:00", meaning = "PRAYER_START").apply { addProperty("source", "Календарь мечети, протокол 42") }.toString())
-        key(Key.DirectionDown, 2); key(Key.Enter); waitIo()
-        key(Key.DirectionDown); key(Key.Enter); key(Key.DirectionDown); key(Key.Enter); waitIo()
-        assertEquals("revision-two", app.schedules.state.value.current!!.metadata.revision)
-        compose.onNodeWithText("К расписанию").performClick()
-        key(Key.DirectionDown, 3); key(Key.Enter)
-        key(Key.DirectionDown); key(Key.Enter); waitIo()
-        assertEquals("revision-one", app.schedules.state.value.current!!.metadata.revision)
-        val restored = dev.nurislam.tv.data.LocalScheduleRepository(dev.nurislam.tv.data.AtomicScheduleStorage(java.io.File(app.filesDir, "schedule-store.json")))
-        runBlocking { restored.load() }
-        assertEquals("revision-one", restored.state.value.current!!.metadata.revision)
-        file.delete()
+        val year=Instant.now().atZone(app.schedules.state.value.zone).year
+        val file=java.io.File(app.getExternalFilesDir(null),"incoming-schedule.json")
+        file.writeText(ScheduleFixtures.json(year,"one",approved=false).toString())
+        settings(); tap("Для специалиста"); tap("Резервный импорт из папки приложения")
+        compose.onNodeWithTag("import-apply").assertIsEnabled(); assertNull(app.schedules.state.value.current)
+        key(Key.Enter); waitIo(); assertEquals("one",app.schedules.state.value.current!!.metadata.revision)
+        compose.onNodeWithText("Вернуться к табло").performClick()
+        file.writeText(ScheduleFixtures.json(year,"two",asr="16:00").toString())
+        settings(); tap("Для специалиста"); tap("Резервный импорт из папки приложения"); key(Key.Enter); waitIo()
+        compose.onNodeWithText("Вернуться к табло").performClick()
+        settings(); tap("Загруженные данные"); tap("Вернуть предыдущее расписание")
+        assertEquals("one",app.schedules.state.value.current!!.metadata.revision)
+        val restored=dev.nurislam.tv.data.LocalScheduleRepository(dev.nurislam.tv.data.AtomicScheduleStorage(java.io.File(app.filesDir,"schedule-store.json")))
+        runBlocking { restored.load() }; assertEquals("one",restored.state.value.current!!.metadata.revision); file.delete()
     }
 
     @Test fun missingAndInvalidInboxShowErrorsAndPreserveCurrentData() {
@@ -130,7 +99,7 @@ class MainActivityTest {
         compose.onAllNodesWithText("15:15").assertCountEquals(0)
     }
 
-    @Test fun safUriIsParsedButUnapprovedDataCannotBeApplied() {
+    @Test fun safUriPreservesSourceFlagsWithoutApprovalGate() {
         val uri = android.net.Uri.parse("content://test.documents/calendar.json")
         shadowOf(app.contentResolver).registerInputStream(uri, java.io.ByteArrayInputStream(ScheduleFixtures.json(approved = false).toString().toByteArray()))
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java]
@@ -138,30 +107,22 @@ class MainActivityTest {
         assertNotNull(vm.candidate.value)
         assertFalse(vm.candidate.value!!.metadata.approved)
         compose.runOnIdle { vm.applyCandidate() }; waitIo()
-        assertNull(app.schedules.state.value.current)
-        assertNotNull(vm.message.value)
+        assertNotNull(app.schedules.state.value.current)
+        assertFalse(app.schedules.state.value.current!!.metadata.approved)
     }
 
-    @Test fun labelEditorWorksWithDpadWithoutSystemKeyboard() {
-        settings(); key(Key.DirectionDown, 5); key(Key.Enter)
-        compose.onNodeWithTag("label-editor").assertIsDisplayed()
-        key(Key.Enter) // Cyrillic А.
-        compose.onNodeWithTag("label-value").assert(hasText("Нур ИсламА"))
-        key(Key.Back)
-        assertEquals("Нур Ислам", app.settings.state.value.mosqueName)
-        key(Key.Enter); key(Key.Enter)
-        key(Key.DirectionLeft, 2); key(Key.Enter); waitIo()
-        assertEquals("Нур ИсламА", app.settings.state.value.mosqueName)
+    @Test fun noDataGivesDirectImportAndOneOkMenu() {
+        compose.onNodeWithTag("load-schedule").assertIsDisplayed()
+        settings(); key(Key.Enter)
+        assertEquals(Intent.ACTION_OPEN_DOCUMENT,shadowOf(compose.activity).nextStartedActivityForResult.intent.action)
     }
 
     @Test fun releaseMenuAndThemeSwitchWorkInEveryDisplayMode() {
-        for (mode in dev.nurislam.tv.domain.DisplayMode.entries) {
-            runBlocking { app.settings.update { it.copy(displayMode = mode, theme = BoardThemeId.ELEGANT) } }
-            settings()
-            key(Key.DirectionDown); key(Key.Enter); waitIo()
-            compose.onNodeWithText("Тема: CLASSIC").assertIsDisplayed()
-            key(Key.Back)
-            compose.onNodeWithTag("admin-panel").assertDoesNotExist()
+        for(mode in dev.nurislam.tv.domain.DisplayMode.entries) {
+            runBlocking { app.settings.update { it.copy(displayMode=mode,theme=BoardThemeId.ELEGANT) } }
+            settings(); key(Key.DirectionDown,2);key(Key.Enter);key(Key.Enter);waitIo()
+            assertEquals(BoardThemeId.CLASSIC,app.settings.state.value.theme)
+            key(Key.Back);key(Key.Back);compose.onNodeWithTag("admin-panel").assertDoesNotExist()
         }
     }
 

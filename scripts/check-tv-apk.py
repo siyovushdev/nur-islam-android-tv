@@ -67,7 +67,7 @@ try:
     collect_images('baseline')
     capability = run('exec-out', 'run-as', package, '--user', user_id, 'cat', 'files/qa-home-capability.json')
     (out / 'home-capability.json').write_text(capability)
-    home_result = probe_home(adb, package, component, out / 'home', allow_unsupported=True)
+    home_result = 'NOT RUN: system HOME is unchanged in this acceptance'
     (out / 'home-result.txt').write_text(home_result + '\n')
     def private_hashes():
         result = {}

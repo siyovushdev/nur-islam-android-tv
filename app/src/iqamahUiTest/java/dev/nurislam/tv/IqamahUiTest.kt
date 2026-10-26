@@ -104,9 +104,9 @@ class IqamahUiTest {
         tap("Добавить в черновик")
         compose.onNodeWithText("Понятно").performClick()
         assertNull(saved)
-        compose.onNodeWithText("Назад / отмена").performClick()
+        compose.onNodeWithText("Назад").performClick()
         tap("Функция икамата")
-        compose.onNodeWithText("Назад / отмена").performClick()
+        compose.onNodeWithText("Назад").performClick()
         tap("Отменить изменения и выйти"); assertEquals(1, closed); assertNull(saved)
     }
     @Test fun unknownFajrAndJumuahNeverOfferRelativeModeOrFalseApproval() {
@@ -115,7 +115,7 @@ class IqamahUiTest {
         compose.onNodeWithText("Базовое поле подтверждено как начало молитвы").performScrollTo().assertIsNotEnabled()
         tap("Режим: Точное время")
         compose.onNodeWithText("Режим: Отключено").assertIsDisplayed()
-        compose.onNodeWithText("Назад / отмена").performClick()
+        compose.onNodeWithText("Назад").performClick()
         tap("Джума (пятница)"); tap("Режим: Отключено"); tap("Режим: Точное время")
         compose.onNodeWithText("Режим: Отключено").assertIsDisplayed()
     }
@@ -204,7 +204,7 @@ class IqamahUiTest {
         } }
         tap("Откат сохранённых правил")
         assertEquals(0, rollbacks)
-        compose.onNodeWithText("Назад / отмена").performClick()
+        compose.onNodeWithText("Назад").performClick()
         assertEquals(0, rollbacks)
         tap("Откат сохранённых правил"); tap("Подтвердить откат")
         assertEquals(1, rollbacks)
@@ -279,7 +279,6 @@ class IqamahUiTest {
         compose.onNodeWithTag("row-ASR").assertHighlighted(true)
     }
     @Test fun actualConflictBoardCanBeSafelyDisabledUsingOnlyDpad() {
-        if (!BuildConfig.PHONE_PREVIEW) compose.onNodeWithText("Пропустить и открыть табло").performClick()
         val app = compose.activity.application as NurIslamApplication
         compose.waitUntil(10_000) { app.iqamah.state.value.loaded }
         val today = Instant.now().atZone(MoscowZone).toLocalDate()
@@ -291,8 +290,8 @@ class IqamahUiTest {
         kotlinx.coroutines.runBlocking { app.schedules.apply(calendar); app.iqamah.save(bad) }
         compose.onNodeWithTag("iqamah-conflict").assertIsDisplayed()
         key(Key.Menu)
-        if (!BuildConfig.PHONE_PREVIEW) { key(Key.DirectionDown); key(Key.Enter) }
-        key(Key.DirectionDown, if (BuildConfig.PHONE_PREVIEW) 9 else 10); key(Key.Enter)
+        key(Key.DirectionDown, if (BuildConfig.PHONE_PREVIEW) 4 else 5); key(Key.Enter)
+        key(Key.DirectionDown); key(Key.Enter)
         compose.onNodeWithText("Функция икамата").assertIsOn()
         key(Key.Enter) // Disable without silently rewriting either time.
         key(Key.DirectionUp); key(Key.Enter) // Save footer.
@@ -324,7 +323,7 @@ class IqamahUiTest {
             PrayerBoardScreen(clock.value, clock, unknown.current!!.day(day), null, false, false, iqamah = iqamahStatus(clock.value, c, unknown, true))
         } }
         compose.onNodeWithTag("iqamah-boundary-warning").assertIsDisplayed()
-        compose.onNodeWithText("UNCONFIRMED", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Проверьте правила икамата в настройках").assertIsDisplayed()
         compose.onNodeWithTag("iqamah-arrival").assertIsDisplayed()
         image("unknown-boundary")
         show(c.copy(enabled = false), knownFajr = false)
@@ -342,7 +341,7 @@ class IqamahUiTest {
         tap("Функция икамата")
         compose.onNodeWithTag("iqamah-list").performScrollToNode(hasText("Даты изменений и исключения (0)"))
         compose.onNodeWithTag("iqamah-save").assertIsDisplayed()
-        compose.onNodeWithText("Назад / отмена").assertIsDisplayed()
+        compose.onNodeWithText("Назад").assertIsDisplayed()
         image("editor-landscape")
     }
     @Test @Config(sdk = [35], qualifiers = "w960dp-h540dp-xhdpi")

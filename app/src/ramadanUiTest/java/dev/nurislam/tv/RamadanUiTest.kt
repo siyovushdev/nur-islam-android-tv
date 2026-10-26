@@ -111,20 +111,18 @@ class RamadanUiTest {
         compose.onNodeWithText("Понятно").assertIsDisplayed().assert(SemanticsMatcher.expectValue(ImportActionHighlighted, true))
         key(Key.Enter)
         compose.onNodeWithText("Добавить даты в черновик").assertExists()
-        compose.onNodeWithText("Назад / отмена").performClick()
-        compose.onNodeWithText("Назад / отмена").performClick(); assertTrue(closed); assertNull(saved)
+        compose.onNodeWithText("Назад").performClick()
+        compose.onNodeWithText("Назад").performClick(); assertTrue(closed); assertNull(saved)
     }
     @Test fun actualActivityPersistsCounterAndHomeDiscardsModalState() {
         val app = compose.activity.application as NurIslamApplication
         compose.waitUntil(10_000) { app.ramadan.state.value.loaded }
         val d = RamadanDates(first.year, first, first.plusDays(29), "Контрольный протокол UI", true)
         kotlinx.coroutines.runBlocking { app.ramadan.save(RamadanConfig(false, listOf(d))) }
-        if (!BuildConfig.PHONE_PREVIEW) compose.onNodeWithText("Пропустить и открыть табло").performClick()
         fun settings() {
-            if (BuildConfig.PHONE_PREVIEW) compose.onNodeWithTag("phone-settings").performClick()
-            else { key(Key.DirectionCenter, 5); key(Key.DirectionDown); key(Key.Enter) }
+            compose.onNodeWithTag("board-settings").performClick()
         }
-        fun openRamadan() { settings(); compose.onNodeWithTag("admin-list").performScrollToNode(hasText("Рамадан")); compose.onNodeWithText("Рамадан").performClick() }
+        fun openRamadan() { settings(); compose.onNodeWithTag("admin-list").performScrollToNode(hasText("Для специалиста")); compose.onNodeWithText("Для специалиста").performClick(); compose.onNodeWithTag("admin-list").performScrollToNode(hasText("Ручные даты Рамадана (прежний способ)")); compose.onNodeWithText("Ручные даты Рамадана (прежний способ)").performClick() }
         openRamadan(); key(Key.Enter); key(Key.DirectionUp); key(Key.Enter); key(Key.DirectionDown); key(Key.Enter)
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java]
         compose.waitUntil(10_000) { shadowOf(android.os.Looper.getMainLooper()).idle(); !vm.busy.value }

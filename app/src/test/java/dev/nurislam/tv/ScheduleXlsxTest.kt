@@ -50,13 +50,12 @@ class ScheduleXlsxTest {
         assertEquals("18:50", parsed.day(LocalDate.of(2026, 1, 1))!!.times.getValue(ScheduleEvent.ISHA).toString())
     }
     @Test fun approvalIsExplicitAndPhoneSourceRemainsTestAfterPersistence() = runTest {
-        val phone = ScheduleImport.parse(source(), phoneDemo = true)
+        val phone = ScheduleImport.parse(source(), phoneDemo = true, sourceName = "TEST.xlsx")
         assertTrue(isTestSource(phone.metadata.source)); assertFalse(phone.metadata.approved)
         val storage = MemoryStorage()
         val repo = LocalScheduleRepository(storage)
         repo.load()
-        assertThrows(IllegalArgumentException::class.java) { kotlinx.coroutines.runBlocking { repo.apply(phone) } }
-        repo.apply(ScheduleImport.confirmExcel(phone))
+        repo.apply(phone)
         assertTrue(isTestSource(repo.state.value.current!!.metadata.source))
         val tv = ScheduleImport.confirmExcel(ScheduleXlsx.parse(source()))
         assertFalse(isTestSource(tv.metadata.source))
