@@ -15,7 +15,7 @@ TV Release не принимает тестовый источник как ра
 Сборка и проверки без установки:
 
 ```bash
-./gradlew -PnurIslamVersionCode=30002 :app:assembleRelease :app:assemblePhoneRelease \
+./gradlew -PnurIslamVersionCode=30003 :app:assembleRelease :app:assemblePhoneRelease \
   :app:testReleaseUnitTest :app:testPhoneReleaseUnitTest :app:lintRelease :app:lintPhoneRelease
 python3 scripts/sign-release-apks.py \
   --tv app/build/outputs/apk/release/app-release-unsigned.apk \
@@ -44,3 +44,10 @@ RC2 (versionCode 30002) опускает только верхний конту�
 геометрия текста/таблицы и landscape сохранены. Снимки до/после получены из Compose
 в Robolectric/native Skia, не с физического TV. Пакеты и Release-сертификат те же,
 поэтому RC2 обновляет RC1 штатной установкой поверх без удаления данных.
+
+RC3 (versionCode 30003) добавляет мигание только двоеточия больших текущих часов:
+секунду видно / секунду скрыто, от существующего lifecycle-aware секундного таймера.
+Прозрачный символ сохраняет ширину и полное HH:mm для accessibility. Остальные времена
+и обратные отсчёты не мигают. Pixel-проверки обеих тем в portrait/landscape подтверждают
+неподвижность цифр, неизменность строки расписания и возврат исходного изображения
+через две секунды. Подпись/пакеты прежние: установка поверх RC1/RC2 без удаления данных.
