@@ -77,3 +77,5 @@ UI-проверки работают через Robolectric / native Skia, в т
 Прямой импорт Казань XLSX и список файлов выбранной папки с D-pad:
 [инструкция](docs/XLSX_IMPORT.md). Общий ход завершения продукта:
 [COMPLETION_STATUS](docs/COMPLETION_STATUS.md).
+
+Необязательный блок Рамадана с отдельными подтверждёнными датами: [инструкция](docs/RAMADAN.md).
