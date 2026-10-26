@@ -79,12 +79,27 @@ def tap_scroll(label):
 def image(name):
     with (out/(name+'.png')).open('wb') as f: subprocess.run(adb+['exec-out','screencap','-p'],stdout=f,check=True,timeout=30)
 
-def launch():
+def system_launcher_startup_dialog(root):
+    return any(n.get('package') == 'android' and n.get('resource-id') == 'android:id/alertTitle'
+               and n.get('text') == "Quickstep isn't responding" for n in root.iter('node'))
+
+def launch(initial_baseline=False):
     result=run('shell','am','start','-W','-n',component);assert 'Status: ok' in result,result
     if legacy and not phone:
         if visible('Пропустить и открыть табло'): tap('Пропустить и открыть табло')
         find('Нур Ислам')
-    else: find('Настройки')
+    else:
+        try: find('Настройки')
+        except AssertionError:
+            # API 35's stock emulator Launcher can report an ANR during cold boot.
+            # Only the initial baseline launch may wait once for this exact SYSTEM
+            # dialog. Never dismiss a Nur Islam ANR, a crash, or any later failure.
+            if not initial_baseline or not system_launcher_startup_dialog(dump()): raise
+            image('emulator-startup-quickstep')
+            (out/'emulator-startup-quickstep.xml').write_text((out/'last-screen.xml').read_text())
+            (out/'emulator-startup.txt').write_text('System Quickstep ANR at initial baseline startup. Pressed Wait once; no app ANR was dismissed.\n')
+            tap('Wait')
+            find('Настройки')
 
 def restart():
     run('shell','am','force-stop',package);launch()
@@ -138,7 +153,7 @@ try:
     result=run('install','--no-incremental',str(baseline));assert 'Success' in result
     (out/'baseline-install.txt').write_text(result)
     legacy="versionName='0.3.0" in old
-    launch()
+    launch(initial_baseline=True)
     image('first-launch')
     # Prepare a visible value/settings under the previous production signature before update.
     now=dt.datetime.fromtimestamp(int(run('shell','date','+%s').strip()),ZoneInfo('Europe/Moscow'))
