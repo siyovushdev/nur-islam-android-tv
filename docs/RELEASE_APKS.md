@@ -15,7 +15,7 @@ TV Release не принимает тестовый источник как ра
 Сборка и проверки без установки:
 
 ```bash
-./gradlew -PnurIslamVersionCode=30001 :app:assembleRelease :app:assemblePhoneRelease \
+./gradlew -PnurIslamVersionCode=30002 :app:assembleRelease :app:assemblePhoneRelease \
   :app:testReleaseUnitTest :app:testPhoneReleaseUnitTest :app:lintRelease :app:lintPhoneRelease
 python3 scripts/sign-release-apks.py \
   --tv app/build/outputs/apk/release/app-release-unsigned.apk \
@@ -38,3 +38,9 @@ python3 scripts/sign-release-apks.py \
 Проверки этой поставки: Release 448 + PhoneRelease 192 теста PASS, PhoneDebug 192
 регрессионных теста PASS; lint обоих Release без ошибок. Проверены реальные манифесты,
 отсутствие debuggable/тестового календаря в APK, подписи и SHA-256.
+
+RC2 (versionCode 30002) опускает только верхний контур арки Elegant в логическом
+портретном макете, включая CW/CCW. Вершина находится внутри кадра; нижние концы рамки,
+геометрия текста/таблицы и landscape сохранены. Снимки до/после получены из Compose
+в Robolectric/native Skia, не с физического TV. Пакеты и Release-сертификат те же,
+поэтому RC2 обновляет RC1 штатной установкой поверх без удаления данных.

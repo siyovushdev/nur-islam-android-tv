@@ -36,14 +36,19 @@ fun ArchitecturalBackground() {
                 drawCircle(BoardColors.Gold.copy(alpha = .1f), step * .31f, Offset(cx, cy), style = Stroke(1f * s))
             }
         }
+        // In portrait, bring the crown into view without moving the board or
+        // extending the legs past their existing bottom margin. CW/CCW use this
+        // same logical portrait canvas. Landscape keeps its existing geometry.
+        val crownOffset = if (h > w) h * .065f else 0f
+        fun crownY(fraction: Float) = h * fraction + crownOffset
         val arch = Path().apply {
-            moveTo(w * .035f, h * .93f); lineTo(w * .035f, h * .20f)
-            cubicTo(w * .035f, h * .15f, w * .08f, h * .14f, w * .115f, h * .13f)
-            cubicTo(w * .11f, h * .07f, w * .22f, h * .07f, w * .22f, h * .045f)
-            quadraticTo(w * .23f, 0f, w * .5f, -h * .04f)
-            quadraticTo(w * .77f, 0f, w * .78f, h * .045f)
-            cubicTo(w * .78f, h * .07f, w * .89f, h * .07f, w * .885f, h * .13f)
-            cubicTo(w * .92f, h * .14f, w * .965f, h * .15f, w * .965f, h * .20f)
+            moveTo(w * .035f, h * .93f); lineTo(w * .035f, crownY(.20f))
+            cubicTo(w * .035f, crownY(.15f), w * .08f, crownY(.14f), w * .115f, crownY(.13f))
+            cubicTo(w * .11f, crownY(.07f), w * .22f, crownY(.07f), w * .22f, crownY(.045f))
+            quadraticTo(w * .23f, crownY(0f), w * .5f, crownY(-.04f))
+            quadraticTo(w * .77f, crownY(0f), w * .78f, crownY(.045f))
+            cubicTo(w * .78f, crownY(.07f), w * .89f, crownY(.07f), w * .885f, crownY(.13f))
+            cubicTo(w * .92f, crownY(.14f), w * .965f, crownY(.15f), w * .965f, crownY(.20f))
             lineTo(w * .965f, h * .93f)
         }
         drawPath(arch, BoardColors.Gold.copy(alpha = .12f), style = Stroke(15f * s))
