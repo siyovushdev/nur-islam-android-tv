@@ -47,8 +47,10 @@ class MosqueCalendarUiTest {
         compose.onNodeWithTag("calendar-apply").assertIsEnabled();compose.onRoot().performKeyInput{pressKey(Key.Enter)};waitIo()
         assertEquals("one",app.mosqueCalendar.state.value.current!!.revision);assertEquals(before,app.schedules.state.value.current!!.json);assertEquals(display,app.settings.state.value)
         compose.onNodeWithText("Вернуться к табло").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("ramadan-status").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("ramadan-status").assert(hasAnyDescendant(hasText("Встреча сегодня",substring=true)))
         compose.activityRule.scenario.recreate()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("ramadan-status").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("ramadan-status").assertExists();assertEquals(before,app.schedules.state.value.current!!.json)
         val restored=MosqueCalendarRepository(AtomicScheduleStorage(File(app.filesDir,"mosque-calendar-store.json")));runBlocking{restored.load()};assertEquals(calendar().let{MosqueCalendarJson.parse(it.toByteArray()).json},restored.state.value.current!!.json)
     }

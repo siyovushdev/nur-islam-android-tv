@@ -38,7 +38,8 @@ data class MosqueCalendar(
         val compatible = schedules
         val conflict = iqamahConflicts(iqamah, compatible).firstOrNull { it.dates.any { d -> d >= from && d <= until } }
         require(conflict == null) { "Исправьте время в календаре: ${conflict?.detail}" }
-        for (schedule in listOfNotNull(compatible.current, compatible.previous)) for (date in schedule.days.keys.filter { it >= from && it <= until }) {
+        for (date in listOfNotNull(compatible.current, compatible.previous).flatMap { it.days.keys }.distinct().filter { it >= from && it <= until }) {
+            val schedule = compatible.scheduleFor(date) ?: continue
             for (prayer in prayersOn(date)) {
                 val rule = iqamah.rule(prayer, date) ?: continue
                 if (rule.mode == IqamahMode.OFFSET && prayer == IqamahPrayer.FAJR)
@@ -85,7 +86,8 @@ object MosqueCalendarJson {
         val rules = iq?.array("rules")?.map { element ->
             val r = element.asJsonObject
             r.keys("prayer", "from", "until", "exception", "mode", "time", "minutes", "start")
-            val prayer = IqamahPrayer.valueOf(r.text("prayer")); val mode = IqamahMode.valueOf(r.text("mode"))
+            val prayer = runCatching { IqamahPrayer.valueOf(r.text("prayer")) }.getOrElse { error("Неверная молитва в поле prayer календаря") }
+            val mode = runCatching { IqamahMode.valueOf(r.text("mode")) }.getOrElse { error("Неверный способ задания икамата в поле mode календаря") }
             val date = r.date("from").also(::within)
             val last = if (r.has("until")) r.date("until").also(::within) else until
             require(last >= date) { "Конец правила раньше начала" }
@@ -133,4 +135,14 @@ object MosqueCalendarJson {
     private fun JsonObject.date(key: String): LocalDate { val s = text(key); require(s.matches(Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}"))) { "Дата $key должна быть YYYY-MM-DD" }; return LocalDate.parse(s).also { require(it.year in 2000..2200) { "Год вне 2000–2200" } } }
     private fun JsonObject.time(key: String): LocalTime { val s = text(key); require(s.matches(Regex("(?:[01][0-9]|2[0-3]):[0-5][0-9]"))) { "Время $key должно быть HH:mm" }; return LocalTime.parse(s) }
     private fun JsonObject.array(key: String): JsonArray { val v = get(key) ?: return JsonArray(); require(v.isJsonArray) { "В поле $key нужен список" }; return v.asJsonArray }
+}
+
+/** Computed off the UI thread. Pending/replaced documents never execute stale rules. */
+data class CalendarCheck(val problem: String?, val boundaryNotice: String?)
+fun checkCalendar(calendar: MosqueCalendar, schedules: ScheduleState, date: LocalDate): CalendarCheck {
+    val problem = calendar.compatibility(schedules) ?: runCatching { calendar.validateAgainst(schedules) }.exceptionOrNull()?.message
+        ?: if(date < calendar.from || date > calendar.until) "Календарь мечети действует ${calendar.from} — ${calendar.until}. Загрузите файл на текущую дату." else null
+    val boundary = if(problem == null) iqamahBoundaryWarnings(calendar.iqamah, schedules, date).firstOrNull()
+        ?.replace("(fajrInMosque / UNCONFIRMED)", "— колонка «в мечети» не задаёт начало молитвы") else null
+    return CalendarCheck(problem, boundary)
 }

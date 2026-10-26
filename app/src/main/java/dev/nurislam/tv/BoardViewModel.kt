@@ -32,14 +32,14 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
     fun dismissCalendarCandidate() { mutableCalendarCandidate.value = null }
     fun applyCalendar() = operation {
         val candidate = requireNotNull(mutableCalendarCandidate.value)
-        if (schedules.value.current != null) candidate.validateAgainst(schedules.value)
+        if (schedules.value.current != null) withContext(Dispatchers.Default) { candidate.validateAgainst(schedules.value) }
         app.mosqueCalendar.apply(candidate)
         mutableCalendarCandidate.value = null
         mutableMessage.value = "Календарь мечети применён. Табло обновлено."
     }
     fun rollbackCalendar() = operation {
         val previous = requireNotNull(mosqueCalendar.value.previous)
-        if (schedules.value.current != null) previous.validateAgainst(schedules.value)
+        if (schedules.value.current != null) withContext(Dispatchers.Default) { previous.validateAgainst(schedules.value) }
         app.mosqueCalendar.rollback()
         mutableMessage.value = "Предыдущий календарь мечети восстановлен."
     }
@@ -140,7 +140,9 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
                     context.ensureActive()
                     val bytes = input.readBytesBounded(ScheduleXlsx.MAX_BYTES)
                     // Strict calendar parsing still checks duplicate keys and all field types.
-                    val calendar = bytes.firstOrNull() !in listOf(0x50.toByte(), 0xd0.toByte()) && ScheduleJson.documentRoot(bytes).has("type")
+                    val calendar = bytes.firstOrNull() !in listOf(0x50.toByte(), 0xd0.toByte()) && try { ScheduleJson.documentRoot(bytes).has("type") }
+                    catch(e: ScheduleFormatException) { throw e }
+                    catch(_: Exception) { throw ScheduleFormatException("Не удалось прочитать JSON. Проверьте структуру файла и сохраните его в UTF-8.") }
                     if (calendar) {
                         val parsed = MosqueCalendarJson.parse(bytes)
                         context.ensureActive()

@@ -228,16 +228,15 @@ class MainActivity : ComponentActivity() {
                     val minute by remember(now) { derivedStateOf { now.value.truncatedTo(ChronoUnit.MINUTES) } }
                     val date = minute.atZone(displayZone).toLocalDate()
                     val calendar = mosqueCalendar.current
-                    val calendarDiagnostic = remember(calendar, schedules, date) {
-                        calendar?.let { c -> c.compatibility(schedules) ?: runCatching { c.validateAgainst(schedules) }.exceptionOrNull()?.message
-                            ?: if (date < c.from || date > c.until) "Календарь мечети действует ${c.from} — ${c.until}. Загрузите файл на текущую дату." else null }
-                            ?: mosqueCalendar.problem
+                    val calendarCheck = remember(calendar, schedules, date) { mutableStateOf<dev.nurislam.tv.calendar.CalendarCheck?>(null) }
+                    LaunchedEffect(calendar, schedules, date) {
+                        if(calendar != null) calendarCheck.value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                            dev.nurislam.tv.calendar.checkCalendar(calendar, schedules, date)
+                        }
                     }
-                    val useCalendar = calendar != null && calendarDiagnostic == null
-                    val calendarBoundaryNotice = remember(calendar, schedules, date, useCalendar) {
-                        if(useCalendar) iqamahBoundaryWarnings(calendar!!.iqamah, schedules, date).firstOrNull()
-                            ?.replace("(fajrInMosque / UNCONFIRMED)", "— колонка «в мечети» не задаёт начало молитвы") else null
-                    }
+                    val calendarDiagnostic = if(calendar != null) calendarCheck.value?.problem ?: if(calendarCheck.value == null) "Проверяем календарь…" else null else mosqueCalendar.problem
+                    val useCalendar = calendar != null && calendarCheck.value != null && calendarDiagnostic == null
+                    val calendarBoundaryNotice = calendarCheck.value?.boundaryNotice
                     val iqamahConfig = if (mosqueCalendar.hasDocument) { if (useCalendar) calendar!!.iqamah else IqamahConfig() } else if (legacyCompatible) iqamah.config else IqamahConfig()
                     val ramadanConfig = if (mosqueCalendar.hasDocument) { if (useCalendar) calendar!!.ramadan else dev.nurislam.tv.ramadan.RamadanConfig() } else if (legacyCompatible) ramadan.config else dev.nurislam.tv.ramadan.RamadanConfig()
                     val iqamahStatus = remember(minute, iqamahConfig, schedules, clockProblem) {

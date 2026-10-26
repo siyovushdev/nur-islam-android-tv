@@ -114,4 +114,20 @@ class MosqueCalendarTest {
         envelope.getAsJsonObject("current").addProperty("sha256","damaged");storage.bytes=envelope.toString().toByteArray()
         restored.load();assertNotNull(restored.state.value.current);assertNotNull(restored.state.value.problem)
     }
+    @Test fun currentYearMeaningWinsOverReplacedCalendarAndFutureYearRetainsCurrentPeriod() {
+        val c=calendar(json(rules=rule("FAJR")))
+        val known=schedules().current!!;val unknown=schedules(fajr="UNCONFIRMED").current!!
+        c.validateAgainst(ScheduleState(known,unknown,true))
+        val next=ScheduleJson.parse(ScheduleFixtures.json(2027,meaning="PRAYER_START").toString().toByteArray())
+        val years=ScheduleState(next,known,true)
+        assertNull(c.compatibility(years));assertTrue(c.active(at("2026-10-26T06:00"),years));c.validateAgainst(years)
+    }
+    @Test fun publishedDemoFilesMatchAndAreNeverOfficial() {
+        val root=java.io.File("../data/examples").takeIf { it.isDirectory } ?: java.io.File("data/examples")
+        val c=MosqueCalendarJson.parse(java.io.File(root,"mosque-calendar-DEMO.json").readBytes())
+        val s=ScheduleJson.parse(java.io.File(root,"prayer-schedule-DEMO-2026.json").readBytes())
+        assertTrue(c.demo);assertTrue(isTestSource(s.metadata.source));assertFalse(s.metadata.approved)
+        c.validateAgainst(ScheduleState(s,loaded=true))
+    }
+
 }
