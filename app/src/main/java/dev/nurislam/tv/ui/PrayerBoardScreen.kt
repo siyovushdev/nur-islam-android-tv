@@ -20,6 +20,8 @@ import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -82,7 +84,7 @@ fun PrayerBoardScreen(
             Row(safe, horizontalArrangement = Arrangement.spacedBy((48 * scale).dp)) {
                 Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Header(scale, Modifier.weight(.26f))
-                    ClockAndDate(minute, date, scale, Modifier.weight(.32f))
+                    ClockAndDate(minute, now, date, scale, Modifier.weight(.32f))
                     NextPrayerCard(next, now, day, date, scale, Modifier.weight(.32f), status, iqamah)
                     Footer(demo, scale, Modifier.weight(.10f), notice, ramadan)
                 }
@@ -91,7 +93,7 @@ fun PrayerBoardScreen(
         } else {
             Column(safe, horizontalAlignment = Alignment.CenterHorizontally) {
                 Header(scale, Modifier.weight(.15f))
-                ClockAndDate(minute, date, scale, Modifier.weight(.215f))
+                ClockAndDate(minute, now, date, scale, Modifier.weight(.215f))
                 NextPrayerCard(next, now, day, date, scale, Modifier.weight(.19f), status, iqamah)
                 Spacer(Modifier.weight(.015f))
                 ScheduleTable(day, next, iqamah, scale, Modifier.weight(.38f))
@@ -122,7 +124,7 @@ private fun Header(s: Float, modifier: Modifier) {
 }
 
 @Composable
-private fun ClockAndDate(minute: Instant, date: LocalDate, s: Float, modifier: Modifier) {
+private fun ClockAndDate(minute: Instant, now: State<Instant>, date: LocalDate, s: Float, modifier: Modifier) {
     val colors = LocalBoardAppearance.current
     val language = LocalBoardSettings.current.language
     @Composable fun Dates() {
@@ -131,9 +133,26 @@ private fun ClockAndDate(minute: Instant, date: LocalDate, s: Float, modifier: M
     }
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         if (!colors.ornate) Dates()
-        BoardText(formatClock(minute), 220f, s, Modifier.fillMaxWidth().weight(1f).testTag("clock"), digits = true)
+        CurrentClock(formatClock(minute), now, s, Modifier.fillMaxWidth().weight(1f).testTag("clock"))
         if (colors.ornate) Dates()
         if (colors.ornate) Ornament(Modifier.fillMaxWidth(.62f).height((46 * s).dp))
+    }
+}
+
+@Composable
+private fun CurrentClock(time: String, now: State<Instant>, s: Float, modifier: Modifier) {
+    val colors = LocalBoardAppearance.current
+    val settings = LocalBoardSettings.current
+    // Reuse the lifecycle-aware second ticker. Keep the colon's advance and the
+    // complete HH:mm accessibility text in both phases; only its paint changes.
+    val text = buildAnnotatedString {
+        append(time)
+        addStyle(SpanStyle(color = if (now.value.epochSecond % 2L == 0L) colors.Text else Color.Transparent), 2, 3)
+    }
+    Box(modifier, contentAlignment = Alignment.Center) {
+        BasicText(text, style = BoardDigitsStyle.copy(color = colors.Text, fontFamily = colors.fontFamily, textAlign = TextAlign.Center),
+            maxLines = 1, softWrap = false,
+            autoSize = TextAutoSize.StepBased(minFontSize = 6.sp, maxFontSize = (220f * s * settings.textScale).coerceAtLeast(6f).sp, stepSize = .5.sp))
     }
 }
 
@@ -194,7 +213,7 @@ private fun NextPrayerCard(next: NextPrayer?, now: State<Instant>, day: DaySched
     }
 }
 
-// This is the only board composable that reads the second-level clock state.
+// Only this countdown and CurrentClock read the second-level state in composition.
 @Composable
 private fun Countdown(now: State<Instant>, target: Instant, s: Float, modifier: Modifier) {
     val colors = LocalBoardAppearance.current

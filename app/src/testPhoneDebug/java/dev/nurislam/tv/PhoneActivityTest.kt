@@ -50,7 +50,8 @@ class PhoneActivityTest {
     }
     @Test fun phoneLauncherHasNoHomeAdminOrProvisioningEntryPoints() {
         val pm = app.packageManager
-        assertEquals("dev.nurislam.tv.phone.debug", app.packageName)
+        assertEquals("dev.nurislam.tv.phone" + if (BuildConfig.DEBUG) ".debug" else "", app.packageName)
+        assertEquals(BuildConfig.DEBUG, app.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0)
         assertNotNull(pm.getLaunchIntentForPackage(app.packageName))
         assertTrue(pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setPackage(app.packageName), 0).isEmpty())
         val info = pm.getPackageInfo(app.packageName, PackageManager.GET_RECEIVERS or PackageManager.GET_ACTIVITIES or PackageManager.GET_PERMISSIONS)
@@ -239,10 +240,13 @@ class PhoneActivityTest {
 
     @Test fun legacyConflictShowsOnBoardAndViewModelRejectsEnablingItWithoutChangingTimes() {
         val today = Instant.now().atZone(MoscowZone).toLocalDate()
-        val calendar = ScheduleFixtures.schedule(today.year, meaning = "PRAYER_START")
+        val calendar = dev.nurislam.tv.data.ScheduleJson.parse(ScheduleFixtures.json(today.year, meaning = "PRAYER_START")
+            .apply { addProperty("source", "Контрольный протокол UI") }.toString().toByteArray())
         runBlocking { app.schedules.apply(calendar) }
         compose.waitUntil(10_000) { app.iqamah.state.value.loaded }
-        val bad = dev.nurislam.tv.iqamah.IqamahConfig(enabled = true, source = "TEST", rules = listOf(
+        // A controlled approved-source fixture reaches conflict handling in Release too;
+        // unapproved rules are deliberately rejected before that runtime branch.
+        val bad = dev.nurislam.tv.iqamah.IqamahConfig(enabled = true, approved = true, source = "Контрольный протокол UI", rules = listOf(
             dev.nurislam.tv.iqamah.IqamahRule(dev.nurislam.tv.iqamah.IqamahPrayer.DHUHR, today, mode = dev.nurislam.tv.iqamah.IqamahMode.FIXED, value = 950),
             dev.nurislam.tv.iqamah.IqamahRule(dev.nurislam.tv.iqamah.IqamahPrayer.ASR, today, mode = dev.nurislam.tv.iqamah.IqamahMode.FIXED, value = 930)))
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java]

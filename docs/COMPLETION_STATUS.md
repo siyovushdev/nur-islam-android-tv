@@ -1,8 +1,10 @@
 # Программная готовность Nur Islam — Issue #18
 
-База: актуальный main `8d150ff` с PR #13/#14/#17. Интеграционная ветка
-`codex/product-readiness` содержит весь stack. Merge и production-публикация не выполнялись.
-Физические H728/Xiaomi и данные FamilyTV в этой работе не изменялись.
+Исходная база: main `8d150ff` с PR #13/#14/#17. 26 октября 2026 владелец подтвердил
+работу последних изменений и явно разрешил merge. PR #19/#20/#21 уже слиты в main;
+Release-сборки, арка и мигающее двоеточие собраны в [PR #22](https://github.com/siyovushdev/nur-islam-android-tv/pull/22).
+Физические H728/Xiaomi и данные FamilyTV агентом не изменялись. Владелец самостоятельно
+подтвердил работу интерфейса RC3; это не заменяет аппаратный протокол HOME/питания/72 часа.
 
 ## Реализовано и проверено
 
@@ -19,7 +21,7 @@
 | Сборки/тесты/lint | Debug / Release / PhoneDebug / androidTest PASS; 1131 тест, 0 skipped/failures/errors; lint 0 errors, 12 warnings | [Матрица](QA_MATRIX.md); полный интеграционный [CI PASS](https://github.com/siyovushdev/nur-islam-android-tv/actions/runs/40195504467), native TV 34 / Phone 35 PASS |
 | Установка/эксплуатация | Инструкции готовы; Release unsigned, production-ключ не используется | [Администратору](ADMIN_GUIDE.md), [подпись/обновление](SIGNING_AND_UPDATES.md), [аппаратный план](HARDWARE_ACCEPTANCE.md) |
 
-## Draft stack / поставка
+## Слияния и поставка
 
 1. [#19 — XLSX и папки](https://github.com/siyovushdev/nur-islam-android-tv/pull/19),
    HEAD `7c03b42`, [CI PASS](https://github.com/siyovushdev/nur-islam-android-tv/actions/runs/40185119680).
@@ -32,9 +34,26 @@
    APK конечной поставки следует брать только из полностью зелёного run этого PR:
    `nur-islam-phone-debug` / `nur-islam-tv-debug`.
 
-Все PR остаются Draft. Владелец рассматривает stack в порядке #19 → #20 → #21;
-после merge предыдущего retarget следующего на main выполняется отдельно.
+PR #19/#20/#21 слиты последовательно обычными merge-коммитами с сохранением истории;
+перед каждым слиянием проверены зелёные проверки и точный head SHA. PR #22 перенаправлен
+на main после родителей. [Проверки #22](https://github.com/siyovushdev/nur-islam-android-tv/pull/22/checks)
+и [CI main](https://github.com/siyovushdev/nur-islam-android-tv/actions?query=branch%3Amain)
+показывают актуальное состояние; прежние ссылки выше относятся к исходным проверенным SHA.
 Промежуточные APK #19/#20 со случайной CI-подписью не являются окончательной поставкой.
+
+Подписанные [Release RC3](https://github.com/siyovushdev/nur-islam-android-tv/releases/tag/v0.3.0-rc3):
+TV `dev.nurislam.tv` / Phone `dev.nurislam.tv.phone`, versionCode 30003, без debuggable.
+Отдельный постоянный Release-ключ хранится вне репозитория, публичный PIN закреплён.
+RC3 устанавливается поверх RC1/RC2; Debug-пакеты отдельные. [Сборка/подпись](RELEASE_APKS.md).
+GitHub pre-release не означает завершённую production-приёмку.
+
+Последние изменения: верхушка арки Elegant видна в portrait/CW/CCW; текст и таблица
+сохранены, landscape на контрольном рендере побитно прежний. Только двоеточие больших
+часов мигает 1 с / 1 с от существующего секундного таймера. Pixel on/off/on в обеих
+темах и portrait/landscape подтверждает неподвижность цифр и строки расписания.
+Для RC3 локально прошли 9 Board UI + 448 TV Release + 192 Phone Release теста, обе
+сборки/lint и проверка скачанных APK/подписей. Полный CI дополнительных вариантов
+выполняется в #22 и повторяется на main после merge.
 
 [Реальные эмуляторные снимки/протоколы](evidence/native-issue18/README.md),
 [Рамадан Compose/native Skia](evidence/ramadan/elegant-portrait.png),
