@@ -86,6 +86,6 @@ try:
     assert home() == stock
     collect_images('updated')
     screenshot('final-board')
-    (out / 'result.txt').write_text('HOME capability: ' + home_result + '\nPASS: actual Android TV emulator API 34 install/update, native Compose D-pad/settings/themes/CW/CCW/scales, exact XLSX 2920 values/apply/rollback, Ramadan confirmation/persistence; HOME result recorded separately with exact rollback; no physical TV/reboot/Device Owner/Lock Task\n')
+    (out / 'result.txt').write_text('HOME capability: ' + home_result + '\nPASS: actual Android TV emulator API 34 install/update, native Compose D-pad/settings/themes/CW/CCW/scales, exact XLSX 2920 values/apply/rollback, Ramadan confirmation/persistence; HOME unchanged; no HOME round-trip in this run; no physical TV/reboot/Device Owner/Lock Task\n')
 finally:
     (out / 'android-runtime.txt').write_text(run('logcat', '-d', '-t', '200', '-s', 'AndroidRuntime'))

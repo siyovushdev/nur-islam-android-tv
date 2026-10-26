@@ -94,7 +94,9 @@ def settings():
     else: key(23)
     find('Загрузить расписание')
 
-def close_result(): tap('Вернуться к табло');find('Настройки')
+def close_result():
+    tap('Вернуться к табло')
+    find('Нур Ислам' if legacy and not phone else 'Настройки')
 
 def write_json(name,value):
     path=out/name;path.write_text(json.dumps(value,ensure_ascii=False));return path
@@ -173,7 +175,7 @@ try:
         checks.append('PASS: signed update retains imported schedule, theme and scale without uninstall')
     # Use a regional zone with enough daytime margin for a deterministic live iqamah.
     epoch=int(run('shell','date','+%s').strip())
-    zone=next(z for z in ['Europe/Moscow','Asia/Yekaterinburg','Asia/Vladivostok','Europe/Kaliningrad','Asia/Kamchatka'] if 7<=dt.datetime.fromtimestamp(epoch,ZoneInfo(z)).hour<=20)
+    zone=next(z for z in ['Asia/Yekaterinburg','Asia/Vladivostok','Europe/Kaliningrad','Asia/Kamchatka','Europe/Moscow'] if 7<=dt.datetime.fromtimestamp(epoch,ZoneInfo(z)).hour<=20)
     local=dt.datetime.fromtimestamp(epoch,ZoneInfo(zone)).replace(second=0,microsecond=0)
     minutes=local.hour*60+local.minute
     def hm(m): return f'{m//60:02}:{m%60:02}'
@@ -224,6 +226,21 @@ try:
     inbox(write_json('different-mosque.json',other));apply('Проверка расписания');assert not visible('Встреча сегодня',partial=True)
     settings();tap_scroll('Загруженные данные');tap_scroll('Вернуть предыдущее расписание');close_result();find('Встреча сегодня',partial=True)
     checks.append('PASS: whole-calendar replacement/rollback, invalid file preservation, incompatible mosque suspension and schedule rollback')
+    # Exercise the supported, unchanged Excel template in the exact Release APK too.
+    # All 2920 values are independently checked by the parser/native test suite;
+    # here verify this APK's actual import/apply/rollback and today's eight display values.
+    xlsx=Path('app/src/test/resources/xlsx/kazan-2026.xlsx')
+    inbox(xlsx);apply('Проверка расписания')
+    xlsx_day=dt.datetime.fromtimestamp(int(run('shell','date','+%s').strip()),ZoneInfo('Europe/Moscow')).date()
+    expected=dict(line.split('\t',1) for line in xlsx.with_suffix('.tsv').read_text().splitlines())
+    if str(xlsx_day) in expected:
+        for value in expected[str(xlsx_day)].split('\t'): board_value(value)
+    else:
+        find('Загрузите расписание',partial=True)
+    assert not visible('Встреча сегодня',partial=True)
+    image('xlsx-release-board')
+    settings();tap_scroll('Загруженные данные');tap_scroll('Вернуть предыдущее расписание');close_result();find('Встреча сегодня',partial=True)
+    checks.append('PASS: exact Release XLSX preview/apply/display/rollback, calendar preserved and reactivated')
     # Appearance changes are exercised with normal controls, independently of imported data.
     settings();tap('Внешний вид');tap('Тема: CLASSIC');key(4);key(4);image('elegant-board')
     settings();tap('Внешний вид');tap('Тема: ELEGANT');key(4);key(4);image('classic-board')

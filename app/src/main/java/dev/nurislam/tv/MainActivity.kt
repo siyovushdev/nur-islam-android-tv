@@ -273,7 +273,8 @@ class MainActivity : ComponentActivity() {
                             PrayerBoardScreen(minute, now, day, next, resolved == DisplayMode.LANDSCAPE, false, status = status, iqamah = if (iqamahConfig.enabled) iqamahStatus else null,
                                 ramadan = listOfNotNull(dev.nurislam.tv.ramadan.ramadanText(ramadanStatus, settings.language), if(useCalendar) calendar!!.eventText(minute, settings.language) else null).joinToString(" · ").takeIf { it.isNotEmpty() },
                                 notice = when {
-                                    demoData -> "ТЕСТОВОЕ РАСПИСАНИЕ · ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ"
+                                    testSchedule -> "ТЕСТОВОЕ РАСПИСАНИЕ"
+                                    demoData -> "ТЕСТОВЫЙ КАЛЕНДАРЬ"
                                     calendarDiagnostic != null || schedules.problem != null || iqamah.problem != null || ramadan.problem != null || iqamahCompatibility != null || (!mosqueCalendar.hasDocument && legacyReady && !legacyCompatible && (iqamah.config.rules.isNotEmpty() || ramadan.config.dates.isNotEmpty())) -> "Проверьте загруженные данные в настройках"
                                     active == null -> "Загрузите расписание в настройках"
                                     else -> null
