@@ -2,6 +2,7 @@
 import argparse
 import datetime
 import json
+import hashlib
 from zoneinfo import ZoneInfo
 from pathlib import Path
 import re
@@ -11,6 +12,7 @@ import xml.etree.ElementTree as ET
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("apk", type=Path)
+parser.add_argument("--baseline", type=Path)
 parser.add_argument("--serial", default="emulator-5554")
 args = parser.parse_args()
 if not re.fullmatch(r"emulator-\d+", args.serial):
@@ -27,15 +29,23 @@ def run(*command):
                           capture_output=True, timeout=45).stdout
 
 
-def screen_with(label, control=False, timeout=30):
+def screen_with(label, control=False, timeout=30, ignore_case=False):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        run("shell", "uiautomator", "dump", "/sdcard/nur-phone-smoke.xml")
+        dump = run("shell", "uiautomator", "dump", "/sdcard/nur-phone-smoke.xml")
         xml = run("exec-out", "cat", "/sdcard/nur-phone-smoke.xml")
         (output / "screen.xml").write_text(xml)
-        root = ET.fromstring(xml)
+        try:
+            root = ET.fromstring(xml)
+        except ET.ParseError:
+            # UIAutomation can return "null root" while the first window attaches.
+            # Keep diagnostics, retry only within this label's bounded deadline.
+            with (output / "uiautomator-errors.txt").open("a") as diagnostic:
+                diagnostic.write(dump + "\n" + xml + "\n")
+            time.sleep(1)
+            continue
         for node in root.iter("node"):
-            if node.get("text") == label:
+            if node.get("text") == label or (ignore_case and node.get("text", "").casefold() == label.casefold()):
                 if not control:
                     return node
                 # Compose can export a TextView child with enabled=true inside a
@@ -75,7 +85,10 @@ def screenshot(name):
 
 
 try:
-    result = run("install", "--no-incremental", str(args.apk))
+    assert run("shell", "getprop", "ro.kernel.qemu").strip() == "1", "Target must be an emulator"
+    user_id = run("shell", "am", "get-current-user").strip()
+    assert user_id.isdigit(), "Cannot determine active emulator user"
+    result = run("install", "--no-incremental", str(args.baseline or args.apk))
     (output / "install.txt").write_text(result)
     assert "Success" in result, result
     launcher = run("shell", "cmd", "package", "resolve-activity", "--brief",
@@ -101,6 +114,89 @@ try:
     screen_with("Тема: CLASSIC")
     screen_with("Масштаб текста: 115%")
     screenshot("saved-settings")
+    # Real XLSX corpus, supplied by the owner but not an approved mosque calendar.
+    # Exercise an actual SAF selection on Android rather than injecting a content URI.
+    xlsx = Path("app/src/test/resources/xlsx/kazan-2026.xlsx")
+    filename = "TEST-Kazan-2026.xlsx"
+    run("shell", "mkdir", "-p", "/sdcard/Download/NurIslam")
+    run("push", str(xlsx), "/sdcard/Download/NurIslam/" + filename)
+    def tap_plain(label):
+        node = screen_with(label, ignore_case=True)
+        x1, y1, x2, y2 = map(int, re.findall(r"\d+", node.attrib["bounds"]))
+        run("shell", "input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2))
+    tap("Расписание")
+    tap("Импорт JSON / XLSX — выбрать файл")
+    screen_with("NurIslam")
+    screenshot("saf-file-picker")
+    # SAF BACK first goes up a directory; leave the provider in a bounded way.
+    for _ in range(3):
+        run("shell", "uiautomator", "dump", "/sdcard/nur-phone-smoke.xml")
+        picker_xml = run("exec-out", "cat", "/sdcard/nur-phone-smoke.xml")
+        picker_nodes = list(ET.fromstring(picker_xml).iter("node"))
+        if any(node.get("package") == package for node in picker_nodes):
+            break
+        assert any("documentsui" in node.get("package", "") for node in picker_nodes), "Unexpected screen while cancelling SAF"
+        run("shell", "input", "keyevent", "4")
+    screen_with("Импорт JSON / XLSX — выбрать файл")
+    tap("Импорт JSON / XLSX — выбрать файл")
+    screen_with("NurIslam")
+    old_pid = run("shell", "pidof", package).strip()
+    assert old_pid.isdigit(), "Expected exactly one owned app process"
+    # Own Debug UID on an emulator only: simulate process death without force-stop
+    # (force-stop would also discard the pending activity result).
+    run("shell", "run-as", package, "--user", user_id, "kill", "-9", old_pid)
+    # Android retains the pending SAF result and recreates its stopped caller.
+    tap_plain("NurIslam"); tap_plain(filename)
+    screen_with("Проверка расписания")
+    new_pid = run("shell", "pidof", package).strip()
+    assert old_pid and new_pid and old_pid != new_pid, "The pending-result process-death check did not recreate the app"
+    (output / "saf-process-death.txt").write_text("PASS: stopped app process killed during SAF, selected file reopened preview in a new process; no auto-apply\n")
+    assert screen_with("Применить расписание", control=True).get("enabled") == "false"
+    screenshot("xlsx-preview")
+    tap("Понимаю: тестовое расписание не утверждено мечетью")
+    tap("Применить расписание")
+    screen_with("Тестовое расписание применено")
+    envelope = json.loads(run("exec-out", "run-as", package, "--user", user_id, "cat", "files/schedule-store.json"))
+    excel = json.loads(envelope["current"]["json"])
+    oracle = [line.split("\t") for line in Path("app/src/test/resources/xlsx/kazan-2026.tsv").read_text().splitlines()]
+    keys = ["suhurEnd", "fajrInMosque", "sunrise", "zawal", "dhuhr", "asr", "maghrib", "isha"]
+    expected = {line[0]: dict(zip(keys, line[1:])) for line in oracle}
+    assert len(excel["days"]) == 365 and excel["fajrMeaning"] == "UNCONFIRMED"
+    for item in excel["days"]:
+        assert {key: item[key] for key in keys} == expected[item["date"]]
+    (output / "xlsx-values.txt").write_text("PASS: 365 x 8 saved native Android XLSX values exactly match independent original-cell TSV; no Fajr inference; saved formula caches only\n")
+    screenshot("xlsx-result")
+    tap("К расписанию")
+    # A persisted tree grant plus our own D-pad listing is the alternative to Recents.
+    tap("Выбрать папку с JSON / XLSX")
+    # Android may remember the child folder selected by the preceding file picker.
+    run("shell", "uiautomator", "dump", "/sdcard/nur-phone-smoke.xml")
+    tree_xml = run("exec-out", "cat", "/sdcard/nur-phone-smoke.xml")
+    if 'text="NurIslam"' in tree_xml and 'text="' + filename + '"' not in tree_xml:
+        tap_plain("NurIslam")
+    for label in ("USE THIS FOLDER", "Use this folder"):
+        try:
+            tap_plain(label); break
+        except AssertionError:
+            continue
+    else:
+        raise AssertionError("System tree picker did not offer folder confirmation")
+    tap_plain("Allow")
+    screen_with("Импорт JSON / XLSX")
+    screen_with(filename)
+    screenshot("native-folder-list")
+    run("shell", "input", "keyevent", "20")
+    run("shell", "input", "keyevent", "20")
+    run("shell", "input", "keyevent", "23")
+    screen_with("Проверка расписания")
+    tap("Отменить")
+    run("shell", "am", "force-stop", package)
+    run("shell", "am", "start", "-W", "-n", component)
+    tap("Настройки"); tap("Расписание"); tap("Выбрать папку с JSON / XLSX")
+    screen_with("Импорт JSON / XLSX"); screen_with(filename)
+    screenshot("persisted-folder-grant")
+    run("shell", "input", "keyevent", "4")
+    screen_with("Тема: CLASSIC")
     # Synthetic fixtures exist only in the disposable emulator, never inside the APK.
     year = datetime.datetime.now(ZoneInfo("Europe/Moscow")).year
     day = datetime.date(year, 1, 1)
@@ -140,6 +236,17 @@ try:
     tap("Применить расписание")
     screen_with("Тестовое расписание применено")
     screenshot("import-success")
+    tap("К расписанию")
+    tap("Откат к предыдущему расписанию")
+    tap("Подтвердить откат")
+    tap("Понятно")
+    restored = json.loads(json.loads(run("exec-out", "run-as", package, "--user", user_id, "cat", "files/schedule-store.json"))["current"]["json"])
+    assert restored == excel, "Rollback did not recover the exact imported XLSX calendar"
+    screenshot("xlsx-rollback")
+    tap("Импорт из локальной папки")
+    tap("Понимаю: тестовое расписание не утверждено мечетью")
+    tap("Применить расписание")
+    screen_with("Тестовое расписание применено")
     tap("Вернуться к табло")
     screen_with("ТЕСТОВОЕ РАСПИСАНИЕ")
     screen_with("15:15")
@@ -149,6 +256,35 @@ try:
     screen_with("ТЕСТОВОЕ РАСПИСАНИЕ")
     screen_with("15:15")
     screenshot("restored-test-schedule-banner")
+    tap("Настройки")
+    tap_scrolled("Рамадан")
+    tap("Показывать блок Рамадана")
+    tap("Добавить даты Рамадана")
+    today = datetime.datetime.fromtimestamp(int(run("shell", "date", "+%s").strip()), ZoneInfo("Europe/Moscow")).date()
+    first_fast = today + datetime.timedelta(days=5)
+    def enter_ramadan_date(label, value):
+        tap(label); tap("Цифры без разделителей")
+        run("shell", "input", "text", value.strftime("%Y%m%d"))
+        run("shell", "input", "keyevent", "4")
+        tap("Применить ввод")
+    enter_ramadan_date("Первый день поста: не задан", first_fast)
+    enter_ramadan_date("Ураза-байрам: не задан", first_fast + datetime.timedelta(days=29))
+    tap("Источник: не указан")
+    tap("Источник и документ согласования")
+    run("shell", "input", "text", "Emulator-QA-fixture")
+    run("shell", "input", "keyevent", "4")
+    tap("Сохранить")
+    tap_scrolled("Даты утверждены мечетью")
+    tap_scrolled("Добавить даты в черновик")
+    tap("Сохранить"); tap("Подтвердить и сохранить даты")
+    screen_with("Даты сохранены"); tap("Вернуться к табло")
+    screen_with("ТЕСТОВОЕ РАСПИСАНИЕ")
+    def ramadan_caption():
+        current = datetime.datetime.fromtimestamp(int(run("shell", "date", "+%s").strip()), ZoneInfo("Europe/Moscow")).date()
+        days_left = str((first_fast - current).days)
+        return "Беренче ураза көненә: " + days_left + " көн\nДо первого дня поста Рамадан: " + days_left + " дн."
+    screen_with(ramadan_caption())
+    screenshot("ramadan-phone-board")
     tap("Настройки")
     tap_scrolled("Икамат")
     screen_with("ТЕСТОВЫЕ ПРАВИЛА · не утверждены мечетью")
@@ -219,6 +355,25 @@ try:
     else:
         assert not highlighted, "Tomorrow's prayer must not highlight today's row"
     screenshot("iqamah-finished")
-    (output / "result.txt").write_text("PASS: signed APK install, LAUNCHER, no HOME entry point, touch settings/theme/scale, cold process restart; unapproved test-source block/cancel; approved phone-test acknowledge/apply/result/board; persistent banner; iqamah default-off, explicit touch entry/save/confirmation, process restart, real-time arrival and automatic exit; no system settings changed\n")
+    if args.baseline:
+        def private_hashes():
+            result = {}
+            for name in ("files/schedule-store.json", "files/ramadan-store.json", "files/iqamah-store.json", "shared_prefs/display.xml"):
+                contents = run("exec-out", "run-as", package, "--user", user_id, "cat", name)
+                result[name] = hashlib.sha256(contents.encode()).hexdigest()
+            return result
+        before = private_hashes()
+        run("shell", "am", "force-stop", package)
+        install = run("install", "-r", "--no-incremental", str(args.apk))
+        assert "Success" in install
+        after = private_hashes()
+        assert before == after, "Signed package update changed private data"
+        (output / "update-preservation.json").write_text(json.dumps({"result": "PASS", "before": before, "after": after}, indent=2))
+        run("shell", "am", "start", "-W", "-n", component)
+        screen_with("ТЕСТОВОЕ РАСПИСАНИЕ · ТЕСТОВЫЙ ИКАМАТ"); screen_with(ramadan_caption())
+        tap("Настройки"); screen_with("Тема: CLASSIC"); screen_with("Масштаб текста: 115%")
+        run("shell", "input", "keyevent", "4")
+        screenshot("signed-update-kept-data")
+    (output / "result.txt").write_text("PASS: persistent-signer base-to-higher-version update with exact private-file preservation; real SAF XLSX, 2920 values, persistent tree and D-pad listing; Ramadan touch input/confirmation/save/restart; signed APK install, LAUNCHER, no HOME entry point, touch settings/theme/scale, cold process restart; unapproved test-source block/cancel; approved phone-test acknowledge/apply/result/board; persistent banner; iqamah default-off, explicit touch entry/save/confirmation, process restart, real-time arrival and automatic exit; no system settings changed\n")
 finally:
     (output / "android-runtime.txt").write_text(run("logcat", "-d", "-t", "150", "-s", "AndroidRuntime"))

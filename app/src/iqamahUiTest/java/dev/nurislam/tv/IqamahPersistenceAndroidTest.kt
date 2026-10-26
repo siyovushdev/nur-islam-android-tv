@@ -15,7 +15,7 @@ import java.time.LocalDate
 
 /** Framework AtomicFile + real local files, not a physical reboot/hardware acceptance. */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [26, 29, 30, 31, 35])
+@Config(sdk = [26, 29, 30, 31, 34, 35])
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 class IqamahPersistenceAndroidTest {
     @Test fun savedRulesReloadAndRollbackUsingFrameworkStorage() = runBlocking {

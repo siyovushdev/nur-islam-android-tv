@@ -96,6 +96,21 @@ class ScheduleImportUiTest {
         compose.onNodeWithTag("import-apply").assertIsNotEnabled()
         assertEquals(0, appliedCount)
     }
+    @Test fun viewModelRejectsTestSourceEvenWhenUiConfirmationIsBypassed() {
+        assertFalse(BuildConfig.PHONE_PREVIEW)
+        val app = compose.activity.application as NurIslamApplication
+        compose.waitUntil(10_000) { app.schedules.state.value.loaded }
+        val file = java.io.File(app.cacheDir, "qa-calendar.json").apply { writeText(value(source = "ТЕСТ ДЛЯ ТЕЛЕФОНА").json) }
+        val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java]
+        compose.runOnIdle { vm.import(android.net.Uri.fromFile(file)) }
+        compose.waitUntil(10_000) { shadowOf(android.os.Looper.getMainLooper()).idle(); !vm.busy.value }
+        assertTrue(isTestSource(vm.candidate.value!!.metadata.source))
+        compose.runOnIdle { vm.applyCandidate(excelConfirmed = true) }
+        compose.waitUntil(10_000) { shadowOf(android.os.Looper.getMainLooper()).idle(); !vm.busy.value }
+        assertNull(app.schedules.state.value.current)
+        assertTrue(vm.message.value!!.contains("Тестовый источник нельзя"))
+        file.delete()
+    }
     @Test fun approvedPhoneTestSourceRemainsBlockedInTvBuilds() {
         assertFalse(BuildConfig.PHONE_PREVIEW)
         show(source = "ТЕСТ ДЛЯ ТЕЛЕФОНА")

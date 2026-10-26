@@ -21,7 +21,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /** Actual Android adapter/manifest exercised with Robolectric framework shadows, not a real TV. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [26, 29, 30, 31, 35])
+@Config(sdk = [26, 29, 30, 31, 34, 35])
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 class DeviceAccessAndroidTest {
     private fun withDevice(block: (Activity, AndroidDeviceAccess) -> Unit) {

@@ -66,6 +66,20 @@ class ScheduleXlsxTest {
         assertTrue(isTestSource(restored.state.value.current!!.metadata.source))
         assertEquals(phone.days, restored.state.value.current!!.days)
     }
+    @Test fun testFilenameMarksExcelWithoutAutomaticallyApprovingIt() {
+        val file = ScheduleImport.parse(source(), sourceName = "ТЕСТ ДЛЯ ТЕЛЕФОНА.xlsx")
+        assertTrue(isTestSource(file.metadata.source)); assertFalse(file.metadata.approved)
+        assertNotNull(file.excelNotice)
+        assertFalse(isTestSource(ScheduleImport.parse(source(), sourceName = "vremena_namazov_RT_2026_0.xlsx").metadata.source))
+    }
+    @Test fun cancellationDuringUnzipOrXmlIsNotSwallowedAndAnotherImportRemainsValid() {
+        var checkpoints = 0
+        assertThrows(java.util.concurrent.CancellationException::class.java) {
+            ScheduleImport.parse(source()) { if (++checkpoints > 1500) throw java.util.concurrent.CancellationException("user cancelled") }
+        }
+        assertTrue(checkpoints > 1500)
+        assertEquals(365, ScheduleXlsx.parse(source()).days.size)
+    }
     @Test fun jsonApprovalCannotUseExcelConfirmation() {
         val json = ScheduleJson.parse(ScheduleFixtures.json(approved = false).toString().toByteArray())
         assertThrows(IllegalArgumentException::class.java) { ScheduleImport.confirmExcel(json) }

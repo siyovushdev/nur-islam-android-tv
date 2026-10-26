@@ -1,0 +1,25 @@
+{
+  "before": {
+    "resolver": "com.google.android.tvlauncher/.MainActivity",
+    "roles": [
+      "com.google.android.tvlauncher"
+    ]
+  },
+  "setCommand": "Success\n",
+  "assigned": {
+    "resolver": "com.google.android.tvlauncher/.MainActivity",
+    "roles": [
+      "dev.nurislam.tv.debug"
+    ],
+    "launch": "com.google.android.tvlauncher/.MainActivity",
+    "launchReport": "Starting: Intent { act=android.intent.action.MAIN cat=[android.intent.category.HOME] }\nWarning: Activity not started, intent has been delivered to currently running top-most instance.\nStatus: ok\nLaunchState: UNKNOWN (0)\nActivity: com.google.android.tvlauncher/.MainActivity\nTotalTime: 0\nWaitTime: 4\nComplete\n"
+  },
+  "result": "UNSUPPORTED: role change did not change the actual stock HOME",
+  "restored": {
+    "resolver": "com.google.android.tvlauncher/.MainActivity",
+    "roles": [
+      "com.google.android.tvlauncher"
+    ],
+    "launch": "com.google.android.tvlauncher/.MainActivity"
+  }
+}

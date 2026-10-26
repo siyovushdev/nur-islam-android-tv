@@ -1,0 +1,25 @@
+{
+  "before": {
+    "resolver": "com.android.launcher3/.uioverrides.QuickstepLauncher",
+    "roles": [
+      "com.android.launcher3"
+    ]
+  },
+  "setCommand": "Success\n",
+  "assigned": {
+    "resolver": "dev.nurislam.tv.debug/dev.nurislam.tv.MainActivity",
+    "roles": [
+      "dev.nurislam.tv.debug"
+    ],
+    "launch": "dev.nurislam.tv.debug/dev.nurislam.tv.MainActivity",
+    "launchReport": "Starting: Intent { act=android.intent.action.MAIN cat=[android.intent.category.HOME] }\nStatus: ok\nLaunchState: WARM\nActivity: dev.nurislam.tv.debug/dev.nurislam.tv.MainActivity\nTotalTime: 828\nWaitTime: 890\nComplete\n"
+  },
+  "result": "PASS",
+  "restored": {
+    "resolver": "com.android.launcher3/.uioverrides.QuickstepLauncher",
+    "roles": [
+      "com.android.launcher3"
+    ],
+    "launch": "com.android.launcher3/.uioverrides.QuickstepLauncher"
+  }
+}

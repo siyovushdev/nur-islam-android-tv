@@ -29,6 +29,11 @@ import kotlinx.coroutines.withContext
 fun ImportFolderScreen(tree: Uri, touchMode: Boolean, onFile: (Uri) -> Unit, onChooseFolder: () -> Unit, onClose: () -> Unit,
     load: suspend (String) -> List<ImportDocument> = { emptyList() }, useSystemLoader: Boolean = true) {
     val resolver = LocalContext.current.contentResolver
+    if (DocumentFolder.treeOrNull(tree.toString()) == null) {
+        SettingsMenu("Папка недоступна", listOf(SettingsAction("Выбрать другую папку", "Сохранённая ссылка на папку повреждена") { onChooseFolder() }),
+            touchMode, false, onClose, tag = "import-folder")
+        return
+    }
     var path by remember(tree) { mutableStateOf(listOf(DocumentsContract.getTreeDocumentId(tree) to "Выбранная папка")) }
     var entries by remember { mutableStateOf<List<ImportDocument>>(emptyList()) }
     var problem by remember { mutableStateOf<String?>(null) }

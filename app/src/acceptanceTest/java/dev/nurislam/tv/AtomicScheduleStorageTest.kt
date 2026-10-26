@@ -21,7 +21,7 @@ import java.io.SyncFailedException
 
 /** Runs the real framework AtomicFile implementation for each supported storage protocol. */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [26, 30, 35])
+@Config(sdk = [26, 29, 30, 31, 34, 35])
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 class AtomicScheduleStorageTest {
     private val file get() = File(ApplicationProvider.getApplicationContext<NurIslamApplication>().filesDir, "atomic-regression.json")

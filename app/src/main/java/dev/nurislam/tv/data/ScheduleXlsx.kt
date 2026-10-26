@@ -23,27 +23,33 @@ object ScheduleXlsx {
     const val MAX_BYTES = 8 * 1024 * 1024
     private const val NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
     private const val REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    private val cellReference = Regex("([A-Z]{1,3})([1-9][0-9]{0,4})")
+    private val decimal = Regex("[+-]?[0-9]{1,12}(\\.[0-9]{1,30})?([eE][+-]?[0-9]{1,2})?")
     private val keys = listOf("suhurEnd", "fajrInMosque", "sunrise", "zawal", "dhuhr", "asr", "maghrib", "isha")
     private fun fail(message: String): Nothing = throw ScheduleFormatException("Excel: $message")
     private data class Cell(val text: String, val type: String, val formula: Boolean)
 
-    fun parse(bytes: ByteArray, phoneDemo: Boolean = false): ValidatedSchedule {
+    fun parse(bytes: ByteArray, phoneDemo: Boolean = false, checkActive: () -> Unit = {}): ValidatedSchedule {
         if (bytes.size > MAX_BYTES) fail("файл больше 8 МиБ")
-        return try { convert(bytes, phoneDemo) } catch (e: ScheduleFormatException) { throw e }
+        return try { checkActive(); convert(bytes, phoneDemo, checkActive) } catch (e: java.util.concurrent.CancellationException) { throw e }
+        catch (e: ScheduleFormatException) { throw e }
         catch (_: Exception) { fail("повреждённый XLSX или неподдерживаемая структура") }
     }
 
-    private fun convert(bytes: ByteArray, phoneDemo: Boolean): ValidatedSchedule {
+    private fun convert(bytes: ByteArray, phoneDemo: Boolean, checkActive: () -> Unit): ValidatedSchedule {
+        fun readXml(data: ByteArray, handler: DefaultHandler) = xml(data, handler, checkActive)
         val parts = linkedMapOf<String, ByteArray>()
         var total = 0
         ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
             while (true) {
+                checkActive()
                 val entry = zip.nextEntry ?: break
                 val name = entry.name
                 if (parts.size >= 200 || name.startsWith('/') || name.contains('\\') || name.split('/').any { it == ".." || it == "." } || parts.containsKey(name)) fail("небезопасный ZIP")
                 val content = java.io.ByteArrayOutputStream()
                 val buffer = ByteArray(8192)
                 while (true) {
+                    checkActive()
                     val count = zip.read(buffer)
                     if (count < 0) break
                     total += count
@@ -56,20 +62,20 @@ object ScheduleXlsx {
         if (parts.isEmpty()) fail("нужен .xlsx; старый .xls не поддерживается")
         if (parts.keys.any { it.contains("vba", true) || it.contains("externalLinks", true) || it.contains("embeddings", true) }) fail("макросы и внешние ссылки не поддерживаются")
         val types = parts["[Content_Types].xml"] ?: fail("нет описания XLSX")
-        xml(types, object : DefaultHandler() {
+        readXml(types, object : DefaultHandler() {
             override fun startElement(uri: String, local: String, q: String, a: Attributes) {
                 if (a.getValue("ContentType")?.let { it.contains("macroEnabled", true) || it.contains("vbaProject", true) || it.contains("oleObject", true) } == true) fail("макросы не поддерживаются")
             }
         })
         // Reject external relationships everywhere, including unused worksheets. Never resolve them.
-        parts.filterKeys { it.endsWith(".rels") }.values.forEach { data -> xml(data, object : DefaultHandler() {
+        parts.filterKeys { it.endsWith(".rels") }.values.forEach { data -> readXml(data, object : DefaultHandler() {
             override fun startElement(uri: String, local: String, q: String, a: Attributes) {
                 if (local == "Relationship" && (a.getValue("TargetMode") == "External" || a.getValue("Target")?.contains(Regex("^[a-zA-Z]+:")) == true)) fail("внешние ссылки не поддерживаются")
             }
         }) }
         val sheets = mutableListOf<Pair<Int, String>>()
         var date1904 = false
-        xml(parts["xl/workbook.xml"] ?: fail("нет workbook.xml"), object : DefaultHandler() {
+        readXml(parts["xl/workbook.xml"] ?: fail("нет workbook.xml"), object : DefaultHandler() {
             override fun startElement(uri: String, local: String, q: String, a: Attributes) {
                 if (uri != NS) return
                 if (local == "workbookPr") date1904 = a.getValue("date1904") in listOf("true", "1")
@@ -82,7 +88,7 @@ object ScheduleXlsx {
         if (sheets.size != 1) fail("нужен ровно один лист с годом 2000–2200 в названии")
         val (year, sheetId) = sheets.single()
         var target: String? = null
-        xml(parts["xl/_rels/workbook.xml.rels"] ?: fail("нет связей листов"), object : DefaultHandler() {
+        readXml(parts["xl/_rels/workbook.xml.rels"] ?: fail("нет связей листов"), object : DefaultHandler() {
             override fun startElement(uri: String, local: String, q: String, a: Attributes) {
                 if (local == "Relationship" && a.getValue("Id") == sheetId) {
                     if (target != null || a.getValue("Type") != "$REL/worksheet") fail("неверная связь листа")
@@ -96,7 +102,7 @@ object ScheduleXlsx {
         parts["xl/sharedStrings.xml"]?.let { data ->
             var text: StringBuilder? = null
             var inText = false
-            xml(data, object : DefaultHandler() {
+            readXml(data, object : DefaultHandler() {
                 override fun startElement(uri: String, local: String, q: String, a: Attributes) {
                     if (uri != NS) return
                     if (local == "si") text = StringBuilder()
@@ -121,7 +127,7 @@ object ScheduleXlsx {
         var value = StringBuilder()
         var reading = false
         var formula = false
-        xml(parts[path] ?: fail("нет данных листа"), object : DefaultHandler() {
+        readXml(parts[path] ?: fail("нет данных листа"), object : DefaultHandler() {
             override fun startElement(uri: String, local: String, q: String, a: Attributes) {
                 if (uri != NS) return
                 when (local) {
@@ -133,8 +139,9 @@ object ScheduleXlsx {
                     "c" -> {
                         if (++cells > 200_000) fail("слишком много ячеек")
                         val ref = a.getValue("r") ?: fail("ячейка без адреса")
-                        if (!ref.matches(Regex("[A-Z]{1,3}$row"))) fail("неверный адрес ячейки")
-                        column = ref.takeWhile { it.isLetter() }
+                        val address = cellReference.matchEntire(ref) ?: fail("неверный адрес ячейки")
+                        if (address.groupValues[2].toInt() != row) fail("неверный адрес ячейки")
+                        column = address.groupValues[1]
                         if (!seen.add(column)) fail("повтор ячейки $ref")
                         type = a.getValue("t") ?: "n"; value = StringBuilder(); formula = false
                     }
@@ -207,7 +214,7 @@ object ScheduleXlsx {
         val json = JsonObject().apply {
             addProperty("schemaVersion", 1); addProperty("locationId", "kazan"); addProperty("locationName", "Казань")
             addProperty("timezone", "Europe/Moscow"); addProperty("year", year)
-            addProperty("source", if (phoneDemo) "ТЕСТ: Excel Казань для проверки на телефоне" else "Excel Казань — подтверждение администратора")
+            addProperty("source", if (phoneDemo) "ТЕСТ: Excel Казань — не утверждён мечетью" else "Excel Казань — подтверждение администратора")
             addProperty("revision", "xlsx-sha256:$sha"); addProperty("approved", false)
             addProperty("fajrMeaning", "UNCONFIRMED"); add("days", days)
         }
@@ -217,11 +224,11 @@ object ScheduleXlsx {
     }
 
     private fun number(text: String, address: String): BigDecimal {
-        if (!text.matches(Regex("[+-]?[0-9]{1,12}(\\.[0-9]{1,30})?([eE][+-]?[0-9]{1,2})?"))) fail("$address: неверное число")
+        if (!text.matches(decimal)) fail("$address: неверное число")
         return text.toBigDecimal()
     }
 
-    private fun xml(data: ByteArray, handler: DefaultHandler) {
+    private fun xml(data: ByteArray, handler: DefaultHandler, checkActive: () -> Unit) {
         val text = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(data)).toString().removePrefix("\uFEFF")
         if (text.contains('\u0000') || text.contains(Regex("<!\\s*(DOCTYPE|ENTITY)", RegexOption.IGNORE_CASE))) fail("DTD и XML-сущности запрещены")
         val factory = SAXParserFactory.newInstance().apply { isNamespaceAware = true }
@@ -233,7 +240,7 @@ object ScheduleXlsx {
         reader.entityResolver = org.xml.sax.EntityResolver { _, _ -> fail("внешние XML-сущности запрещены") }
         var depth = 0
         reader.contentHandler = object : DefaultHandler() {
-            override fun startElement(uri: String, local: String, q: String, a: Attributes) { if (++depth > 32) fail("слишком глубокий XML"); handler.startElement(uri, local, q, a) }
+            override fun startElement(uri: String, local: String, q: String, a: Attributes) { checkActive(); if (++depth > 32) fail("слишком глубокий XML"); handler.startElement(uri, local, q, a) }
             override fun endElement(uri: String, local: String, q: String) { handler.endElement(uri, local, q); depth-- }
             override fun characters(ch: CharArray, start: Int, length: Int) = handler.characters(ch, start, length)
         }
@@ -243,9 +250,10 @@ object ScheduleXlsx {
 }
 
 object ScheduleImport {
-    fun parse(bytes: ByteArray, phoneDemo: Boolean = false): ValidatedSchedule {
+    fun parse(bytes: ByteArray, phoneDemo: Boolean = false, sourceName: String? = null, checkActive: () -> Unit = {}): ValidatedSchedule {
+        checkActive()
         if (bytes.size >= 2 && bytes[0] == 0xd0.toByte() && bytes[1] == 0xcf.toByte()) throw ScheduleFormatException("Старый .xls не поддерживается. Сохраните файл в формате .xlsx.")
-        return if (bytes.size >= 4 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4b.toByte()) ScheduleXlsx.parse(bytes, phoneDemo) else ScheduleJson.parse(bytes)
+        return if (bytes.size >= 4 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4b.toByte()) ScheduleXlsx.parse(bytes, phoneDemo || (sourceName?.let(::isTestSource) == true), checkActive) else ScheduleJson.parse(bytes).also { checkActive() }
     }
 
     /** Only XLSX drafts can acquire approval through this explicit UI confirmation. JSON rules stay unchanged. */

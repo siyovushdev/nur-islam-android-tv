@@ -1,0 +1,13 @@
+{
+  "result": "PASS",
+  "before": {
+    "files/schedule-store.json": "b8c88c8fd1362cc2f0483f14487f4ca48eeee29870b078db0dc1f4ffd9650878",
+    "files/ramadan-store.json": "4d2f61d229a642515ab523bd618bf77fa0e5daadf6df93b814db74da5c7aeaf1",
+    "shared_prefs/display.xml": "f6223b5f299d6c40c76923f6098a60f2ba46603d748efd62154a9c8bdf196a8d"
+  },
+  "after": {
+    "files/schedule-store.json": "b8c88c8fd1362cc2f0483f14487f4ca48eeee29870b078db0dc1f4ffd9650878",
+    "files/ramadan-store.json": "4d2f61d229a642515ab523bd618bf77fa0e5daadf6df93b814db74da5c7aeaf1",
+    "shared_prefs/display.xml": "f6223b5f299d6c40c76923f6098a60f2ba46603d748efd62154a9c8bdf196a8d"
+  }
+}

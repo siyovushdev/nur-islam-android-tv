@@ -1,0 +1,15 @@
+{
+  "result": "PASS",
+  "before": {
+    "files/schedule-store.json": "1245252a762694bc74d2ea140922441f72c7afc8e814aef048bcb586991e6006",
+    "files/ramadan-store.json": "2f4bec974a415c9e8460ff9d1a2b8b1b3556b86767f2c182b35afd12131bf314",
+    "files/iqamah-store.json": "1d0e57ba4eb007e9e8c073902ca768bb2f73ca0fdb882e6e7c10eb337b575eb2",
+    "shared_prefs/display.xml": "627ce349e1c1ac8e21b1b8e186f2d2102260aa46a17d32bd25f57b475bbfacb5"
+  },
+  "after": {
+    "files/schedule-store.json": "1245252a762694bc74d2ea140922441f72c7afc8e814aef048bcb586991e6006",
+    "files/ramadan-store.json": "2f4bec974a415c9e8460ff9d1a2b8b1b3556b86767f2c182b35afd12131bf314",
+    "files/iqamah-store.json": "1d0e57ba4eb007e9e8c073902ca768bb2f73ca0fdb882e6e7c10eb337b575eb2",
+    "shared_prefs/display.xml": "627ce349e1c1ac8e21b1b8e186f2d2102260aa46a17d32bd25f57b475bbfacb5"
+  }
+}

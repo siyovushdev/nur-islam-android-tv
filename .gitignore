@@ -7,3 +7,15 @@ local.properties
 *.jks
 *.keystore
 captures/
+
+# Signing material must live outside this repository.
+*.p12
+*.password
+/signing/
+
+__pycache__/
+*.pyc
+/test-binaries/
+/distributions/
+/phone-emulator-results/
+/tv-emulator-results/

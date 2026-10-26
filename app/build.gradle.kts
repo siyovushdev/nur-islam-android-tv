@@ -10,8 +10,10 @@ android {
         applicationId = "dev.nurislam.tv"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = providers.gradleProperty("nurIslamVersionCode").orNull?.let { value ->
+            requireNotNull(value.toIntOrNull()?.takeIf { it in 3..2_100_000_000 }) { "Invalid nurIslamVersionCode" }
+        } ?: 3
+        versionName = "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "PHONE_PREVIEW", "false")
     }
@@ -28,6 +30,7 @@ android {
     }
     buildFeatures { compose = true; buildConfig = true }
     sourceSets.getByName("androidTest").java.srcDir("src/sharedTest/java")
+    sourceSets.getByName("androidTest").assets.srcDir("src/test/resources")
     sourceSets.getByName("testDebug").java.srcDir("src/sharedTest/java")
     sourceSets.getByName("testDebug").java.srcDir("src/acceptanceTest/java")
     sourceSets.getByName("testRelease").java.srcDir("src/acceptanceTest/java")

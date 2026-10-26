@@ -178,7 +178,7 @@ class MainActivity : ComponentActivity() {
             val mode = orientation?.candidate ?: settings.displayMode
             val focus = remember { FocusRequester() }
             val entry = remember { RemoteEntryGesture() }
-            LaunchedEffect(homeRequests.intValue) { admin = false; iqamahOpen = false; ramadanOpen = false; folderOpen = false; orientation = null; entry.reset() }
+            LaunchedEffect(homeRequests.intValue) { if (homeRequests.intValue > 0) { admin = false; iqamahOpen = false; ramadanOpen = false; folderOpen = false; orientation = null; entry.reset() } }
             val lifecycle = LocalLifecycleOwner.current.lifecycle
             DisposableEffect(lifecycle) {
                 val observer = LifecycleEventObserver { _, event ->
@@ -189,22 +189,24 @@ class MainActivity : ComponentActivity() {
             }
             LaunchedEffect(admin, orientation, setupOpen) { if (!admin && orientation == null && !setupOpen) focus.requestFocus() }
             val importPrefs = remember { getSharedPreferences("import-folder", Context.MODE_PRIVATE) }
-            var folderTree by remember { mutableStateOf(importPrefs.getString("tree", null)?.let(android.net.Uri::parse)) }
+            var folderTree by remember { mutableStateOf(DocumentFolder.treeOrNull(runCatching { importPrefs.getString("tree", null) }.getOrNull())) }
             val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
                 if (uri != null) {
+                    admin = true
                     try {
+                        require(DocumentFolder.treeOrNull(uri.toString()) != null) { "Некорректная папка" }
                         contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         check(importPrefs.edit().putString("tree", uri.toString()).commit()) { "Не удалось сохранить доступ к папке" }
                         folderTree = uri; folderOpen = true
-                    } catch (_: Exception) { vm.message("Не удалось сохранить доступ к папке. Попробуйте системный выбор файла.") }
+                    } catch (_: Exception) { folderOpen = false; vm.message("Не удалось сохранить доступ к папке. Попробуйте системный выбор файла.") }
                 }
             }
             fun chooseFolder() {
-                try { folderPicker.launch(folderTree) }
-                catch (_: ActivityNotFoundException) { vm.message("В прошивке нет выбора папки SAF. Попробуйте системный выбор файла или резервный импорт по инструкции.") }
-                catch (_: SecurityException) { vm.message("Прошивка запретила выбор папки.") }
+                try { folderPicker.launch(folderTree ?: ScheduleDocumentPicker.initialDirectory()) }
+                catch (_: ActivityNotFoundException) { folderOpen = false; vm.message("В прошивке нет выбора папки SAF. Попробуйте системный выбор файла или резервный импорт по инструкции.") }
+                catch (_: SecurityException) { folderOpen = false; vm.message("Прошивка запретила выбор папки.") }
             }
-            val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) vm.import(uri) }
+            val picker = rememberLauncherForActivityResult(ScheduleDocumentPicker()) { uri -> if (uri != null) { admin = true; vm.import(uri) } }
             fun launchSafely(intent: Intent, failure: String) {
                 try { startActivity(intent) }
                 catch (_: ActivityNotFoundException) { vm.message(failure) }
