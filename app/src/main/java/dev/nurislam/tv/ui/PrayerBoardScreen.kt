@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.runtime.CompositionLocalProvider
+import dev.nurislam.tv.data.FajrMeaning
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.State
@@ -35,6 +37,7 @@ import java.time.Instant
 import java.time.LocalDate
 
 val LocalBoardZone = staticCompositionLocalOf { MoscowZone }
+private val LocalFajrMeaning = staticCompositionLocalOf { FajrMeaning.UNCONFIRMED }
 
 // A visual marker only: Selected would expose a read-only row as a checkable control.
 internal val BoardRowHighlighted = SemanticsPropertyKey<Boolean>("BoardRowHighlighted")
@@ -51,9 +54,11 @@ fun PrayerBoardScreen(
     notice: String? = null,
     iqamah: IqamahStatus? = null,
     ramadan: String? = null,
+    fajrMeaning: FajrMeaning = FajrMeaning.UNCONFIRMED,
 ) {
     // TextAutoSize keeps measurement state. Recreate only the visual subtree when
     // changing typeface/palette; keep the clock, calendar and settings outside it.
+    CompositionLocalProvider(LocalFajrMeaning provides fajrMeaning) {
     key(LocalBoardAppearance.current, LocalBoardSettings.current.textScale, landscape) {
     Column(Modifier.fillMaxSize()) {
     val boundaryWarning = when (iqamah) {
@@ -111,6 +116,7 @@ fun PrayerBoardScreen(
                 BoardText("Настройки доступны с пульта / кнопки телефона", 26f, scale, Modifier.fillMaxWidth().height((60 * scale).dp), colors.Secondary)
             }
         }
+    }
     }
     }
     }
@@ -198,7 +204,7 @@ private fun NextPrayerCard(next: NextPrayer?, now: State<Instant>, day: DaySched
             BoardText(title, 43f, s, Modifier.fillMaxWidth().weight(.44f).testTag("schedule-status"), bold = true, lines = 2)
             BoardText(detail, 27f, s, Modifier.fillMaxWidth().weight(.36f), color = colors.Secondary, lines = 2)
         } else {
-            val labels = eventLabels(next.event)
+            val labels = eventLabels(next.event, LocalFajrMeaning.current)
             BoardText(prayerLabel(labels.first, labels.second), 76f, s,
                 Modifier.fillMaxWidth().weight(.36f), bold = true)
             Row(Modifier.fillMaxWidth().weight(.44f), verticalAlignment = Alignment.CenterVertically) {
@@ -242,7 +248,7 @@ private fun ScheduleTable(day: DaySchedule?, next: NextPrayer?, iqamah: IqamahSt
             val event = calendarEvent ?: requireNotNull(extra).prayer.event
             val highlight = if (active != null) extra != null || (separate == null && active.prayer.event == event)
                 else next?.event == event && next.at.atZone(LocalBoardZone.current).toLocalDate() == day?.date
-            val labels = eventLabels(event)
+            val labels = eventLabels(event, LocalFajrMeaning.current)
             val time = extra?.at?.atZone(LocalBoardZone.current)?.toLocalTime()?.let(::formatTime) ?: day?.times?.get(event)?.let(::formatTime) ?: "—"
             val description = (if (extra != null) "${extra.prayer.title} · Икамат · ${extra.at.atZone(LocalBoardZone.current).toLocalDate()}" else prayerLabel(labels.first, labels.second)) + "; $time" + if (highlight) "; выделен" else ""
             val color = when { highlight -> if (colors.ornate) colors.Gold else colors.Deep; event.isPrayer -> colors.Text; else -> colors.Secondary }
@@ -292,9 +298,9 @@ private fun BoardText(text: String, size: Float, s: Float, modifier: Modifier, c
     }
 }
 
-fun eventLabels(event: ScheduleEvent): Pair<Int, Int> = when (event) {
+fun eventLabels(event: ScheduleEvent, fajrMeaning: FajrMeaning = FajrMeaning.UNCONFIRMED): Pair<Int, Int> = when (event) {
     ScheduleEvent.SUHUR_END -> R.string.suhur_tt to R.string.suhur_ru
-    ScheduleEvent.FAJR_IN_MOSQUE -> R.string.fajr_tt to R.string.fajr_ru
+    ScheduleEvent.FAJR_IN_MOSQUE -> R.string.fajr_tt to if (fajrMeaning == FajrMeaning.PRAYER_START) R.string.fajr_start_ru else R.string.fajr_ru
     ScheduleEvent.SUNRISE -> R.string.sunrise_tt to R.string.sunrise_ru
     ScheduleEvent.ZAWAL -> R.string.zawal_tt to R.string.zawal_ru
     ScheduleEvent.DHUHR -> R.string.dhuhr_tt to R.string.dhuhr_ru

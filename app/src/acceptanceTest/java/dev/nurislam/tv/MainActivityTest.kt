@@ -39,6 +39,17 @@ class MainActivityTest {
         compose.onNodeWithText("Тема: CLASSIC").assertIsDisplayed()
     }
 
+    @Test fun dataPageDpadSkipsInformationAndAlwaysKeepsAnActionHighlighted() {
+        settings(); tap("Загруженные данные")
+        // First available action is the folder picker, preceded by two read-only rows.
+        key(Key.DirectionUp)
+        key(Key.DirectionDown)
+        compose.onNodeWithText("Выбрать папку с файлами").assert(
+            SemanticsMatcher.expectValue(dev.nurislam.tv.ui.ImportActionHighlighted, true))
+        key(Key.DirectionUp); key(Key.Enter)
+        compose.onNodeWithText("Загрузить расписание").assertIsDisplayed()
+    }
+
     @Test fun orientationIsNotSavedWithoutConfirmationAndSurvivesOnlyWhenConfirmed() {
         orientation(); assertEquals("AUTO",app.settings.state.value.displayMode.name)
         key(Key.Back); compose.onNodeWithTag("orientation-confirm").assertDoesNotExist()

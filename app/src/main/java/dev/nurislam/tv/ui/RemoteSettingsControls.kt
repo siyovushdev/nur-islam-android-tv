@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.sp
 internal data class SettingsAction(val title: String, val detail: String = "", val enabled: Boolean = true, val checked: Boolean? = null, val informational: Boolean = false, val click: () -> Unit)
 
 @Composable
-internal fun SettingsMenu(title: String, actions: List<SettingsAction>, touch: Boolean, busy: Boolean, onBack: () -> Unit, onSave: (() -> Unit)? = null, notice: String? = null, tag: String = "iqamah", focusToken: Any? = null) {
+internal fun SettingsMenu(title: String, actions: List<SettingsAction>, touch: Boolean, busy: Boolean, onBack: () -> Unit, onSave: (() -> Unit)? = null, notice: String? = null, tag: String = "iqamah", focusToken: Any? = null, skipInformation: Boolean = false) {
     var index by remember(title, actions.size) { mutableIntStateOf(actions.indexOfFirst { it.enabled }.takeIf { it >= 0 } ?: actions.size) }
     val focus = remember { FocusRequester() }; val scroll = rememberLazyListState()
     LaunchedEffect(title, focusToken) { focus.requestFocus() }
@@ -38,8 +38,12 @@ internal fun SettingsMenu(title: String, actions: List<SettingsAction>, touch: B
             val handled = key.keyCode in listOf(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BACK)
             val count = actions.size + 1 + if (onSave != null) 1 else 0
             if (handled && key.action == KeyEvent.ACTION_DOWN && !busy) when (key.keyCode) {
-                KeyEvent.KEYCODE_DPAD_DOWN -> index = (index + 1) % count
-                KeyEvent.KEYCODE_DPAD_UP -> index = (index + count - 1) % count
+                KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_UP -> {
+                    val direction = if (key.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1
+                    // Information has no action or visible focus. Back always remains reachable.
+                    do { index = (index + count + direction) % count }
+                    while (skipInformation && index < actions.size && actions[index].informational)
+                }
                 KeyEvent.KEYCODE_BACK -> onBack()
                 else -> when {
                     index < actions.size -> actions[index].let { if (it.enabled) it.click() }

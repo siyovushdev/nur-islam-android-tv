@@ -222,7 +222,7 @@ class MainActivity : ComponentActivity() {
             NurIslamTheme(settings.theme) {
                 CompositionLocalProvider(LocalBoardSettings provides settings.copy(
                     mosqueName = schedules.current?.mosqueName ?: mosqueCalendar.current?.takeIf { it.compatibility(schedules) == null }?.name ?: settings.mosqueName,
-                    location = schedules.current?.locationName ?: settings.location), LocalBoardZone provides displayZone) {
+                    location = schedules.current?.locationName ?: mosqueCalendar.current?.city ?: settings.location), LocalBoardZone provides displayZone) {
                     val now = rememberBoardClock()
                     LaunchedEffect(now) { snapshotFlow { now.value }.collect { vm.sampleClock(it, SystemClock.elapsedRealtime()) } }
                     val minute by remember(now) { derivedStateOf { now.value.truncatedTo(ChronoUnit.MINUTES) } }
@@ -270,7 +270,7 @@ class MainActivity : ComponentActivity() {
                         val board: @Composable () -> Unit = {
                             // Modal settings must hide the board from accessibility/touch automation.
                             Box(Modifier.fillMaxSize().then(if (admin || setupOpen) Modifier.clearAndSetSemantics {} else Modifier)) {
-                            PrayerBoardScreen(minute, now, day, next, resolved == DisplayMode.LANDSCAPE, false, status = status, iqamah = if (iqamahConfig.enabled) iqamahStatus else null,
+                            PrayerBoardScreen(minute, now, day, next, resolved == DisplayMode.LANDSCAPE, false, fajrMeaning = active?.fajrMeaning ?: dev.nurislam.tv.data.FajrMeaning.UNCONFIRMED, status = status, iqamah = if (iqamahConfig.enabled) iqamahStatus else null,
                                 ramadan = listOfNotNull(dev.nurislam.tv.ramadan.ramadanText(ramadanStatus, settings.language), if(useCalendar) calendar!!.eventText(minute, settings.language) else null).joinToString(" · ").takeIf { it.isNotEmpty() },
                                 notice = when {
                                     testSchedule -> "ТЕСТОВОЕ РАСПИСАНИЕ"

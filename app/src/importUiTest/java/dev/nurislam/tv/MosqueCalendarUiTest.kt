@@ -41,6 +41,20 @@ class MosqueCalendarUiTest {
       "ramadan":[{"firstFast":"${today.plusDays(5)}","eid":"${today.plusDays(34)}"}],
       "events":[{"id":"meeting","title":"Встреча сегодня","from":"$today"}]""" else ""} }"""
     private fun loadSchedule(){compose.waitUntil(10_000){app.schedules.state.value.loaded&&app.mosqueCalendar.state.value.loaded};runBlocking{app.schedules.apply(ScheduleJson.parse(ScheduleFixtures.json(today.year,meaning="PRAYER_START").apply{addProperty("timezone","Asia/Yekaterinburg")}.toString().toByteArray()))}}
+    @Test fun calendarBeforeScheduleUsesItsOwnCityAndKeepsPrayerTimesUnavailable() {
+        compose.waitUntil(10_000) { app.schedules.state.value.loaded && app.mosqueCalendar.state.value.loaded }
+        open(); import(calendar()); compose.onNodeWithTag("calendar-apply").performClick(); waitIo()
+        compose.onNodeWithText("Вернуться к табло").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("ramadan-status").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Екатеринбург").assertIsDisplayed()
+        compose.onNodeWithText("Мечеть А").assertIsDisplayed()
+        compose.onAllNodesWithText("Казань").assertCountEquals(0)
+        assertNull(app.schedules.state.value.current)
+        compose.onNodeWithTag("load-schedule").assertIsDisplayed()
+        compose.activityRule.scenario.recreate()
+        compose.onNodeWithText("Екатеринбург").assertIsDisplayed()
+    }
+
     @Test fun importCalendarOneApplyDisplaysRamadanEventAndSurvivesRecreateWithoutChangingScheduleOrSettings(){
         loadSchedule();val before=app.schedules.state.value.current!!.json;val display=app.settings.state.value
         open();import(calendar());compose.onNodeWithTag("calendar-preview").assertIsDisplayed();assertNull(app.mosqueCalendar.state.value.current)

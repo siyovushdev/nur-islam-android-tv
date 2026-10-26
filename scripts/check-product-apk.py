@@ -202,7 +202,7 @@ try:
         validFrom=str(today-dt.timedelta(days=366)),validUntil=str(today+dt.timedelta(days=366)),source='ТЕСТ: искусственные даты и правила',revision='calendar-one',demo=True,
         iqamah=dict(rules=[dict(prayer='ASR',mode='FIXED',time=target.strftime('%H:%M'),**{'from':str(today)})]),
         ramadan=[dict(firstFast=str(first),eid=str(first+dt.timedelta(days=29)))],events=[dict(id='meeting',title='Встреча сегодня',**{'from':str(today)})])
-    inbox(write_json('TEST-calendar.json',cal));apply('Календарь мечети')
+    inbox(write_json('TEST-calendar.json',cal));find('Календарь мечети');image('calendar-preview-full');apply('Календарь мечети')
     find('До икамата',partial=True);find('Встреча сегодня',partial=True);find('До первого дня поста Рамадан: 5 дн.',partial=True)
     image('calendar-waiting')
     before=ui_signature();restart();find('До икамата',partial=True);assert ui_signature()==before

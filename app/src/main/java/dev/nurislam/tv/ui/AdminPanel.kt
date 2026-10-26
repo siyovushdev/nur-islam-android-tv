@@ -48,7 +48,7 @@ fun AdminPanel(
     fun back() { if (page == "main") onClose() else page = "main" }
     if (message != null) {
         SettingsMenu("Результат", listOf(SettingsAction(message, enabled = false, informational = true) {},
-            SettingsAction("Вернуться к табло") { onDismissMessage(); onClose() }), touchMode, busy, onBack = onDismissMessage, tag = "admin")
+            SettingsAction("Вернуться к табло") { onDismissMessage(); onClose() }), touchMode, busy, onBack = onDismissMessage, tag = "admin", skipInformation = true)
         return
     }
     if (candidate != null) { ScheduleImportPreview(candidate, schedules, busy, touchMode, onApply, onDismissCandidate); return }
@@ -97,5 +97,5 @@ fun AdminPanel(
             SettingsAction("Резервный импорт из папки приложения", inboxPath) { onInbox() })
     }
     SettingsMenu(when(page) { "main" -> "Настройки"; "appearance" -> "Внешний вид"; "orientation" -> "Ориентация экрана"; "data" -> "Загруженные данные"; else -> "Для специалиста" },
-        actions, touchMode, busy, ::back, tag = "admin", focusToken = focusToken)
+        actions, touchMode, busy, ::back, tag = "admin", focusToken = focusToken, skipInformation = true)
 }

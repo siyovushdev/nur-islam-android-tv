@@ -9,6 +9,7 @@
     <string name="no_next">Нет данных о следующем намазе</string>
     <string name="no_next_detail">Ожидается расписание на следующий день</string>
     <string name="suhur_tt">Сәхәр тәмам</string><string name="suhur_ru">Завершение сухура</string>
+    <string name="fajr_start_ru">Фаджр</string>
     <string name="fajr_tt">Иртәнге</string><string name="fajr_ru">Фаджр (в мечети)</string>
     <string name="sunrise_tt">Кояш чыгу</string><string name="sunrise_ru">Восход</string>
     <string name="zawal_tt">Зәвәл</string><string name="zawal_ru">Зенит</string>
