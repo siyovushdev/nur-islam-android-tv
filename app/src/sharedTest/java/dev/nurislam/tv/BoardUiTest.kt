@@ -51,6 +51,24 @@ class BoardUiTest {
         dir.mkdirs()
         File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
+    @Test fun fajrNameSeparatesKnownStartFromLegacyMosqueColumnInBothThemes() {
+        val meaning = mutableStateOf(dev.nurislam.tv.data.FajrMeaning.PRAYER_START)
+        val theme = mutableStateOf(BoardThemeId.ELEGANT)
+        compose.setContent {
+            NurIslamTheme(theme.value) {
+                CompositionLocalProvider(LocalBoardSettings provides dev.nurislam.tv.settings.AppSettings(language = dev.nurislam.tv.settings.BoardLanguage.RUSSIAN)) {
+                    PrayerBoardScreen(instant, remember { mutableStateOf(instant) }, day, null, false, false, fajrMeaning = meaning.value)
+                }
+            }
+        }
+        for (style in BoardThemeId.entries) {
+            compose.runOnIdle { theme.value = style; meaning.value = dev.nurislam.tv.data.FajrMeaning.PRAYER_START }
+            compose.onNodeWithTag("row-FAJR_IN_MOSQUE").assert(hasAnyDescendant(hasText("Фаджр")))
+            compose.runOnIdle { meaning.value = dev.nurislam.tv.data.FajrMeaning.UNCONFIRMED }
+            compose.onNodeWithTag("row-FAJR_IN_MOSQUE").assert(hasAnyDescendant(hasText("Фаджр (в мечети)")))
+        }
+    }
+
     @Test fun portraitShowsAllEightRowsAndSeparateCountdown() {
         board(false)
         ScheduleEvent.entries.forEach { compose.onNodeWithTag("row-${it.name}").assertIsDisplayed() }

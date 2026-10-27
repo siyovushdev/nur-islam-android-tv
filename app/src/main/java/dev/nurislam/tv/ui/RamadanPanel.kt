@@ -12,6 +12,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun RamadanPanel(state: RamadanState, busy: Boolean, message: String?, touchMode: Boolean, clockProblem: Boolean,
     onClockConfirm: () -> Unit, onSave: (RamadanConfig) -> Unit, onRollback: () -> Unit, onDismissMessage: () -> Unit, onClose: () -> Unit) {
+    val zone = LocalBoardZone.current
     var draft by remember { mutableStateOf(state.config) }
     var initialized by remember { mutableStateOf(state.loaded) }
     var page by remember { mutableStateOf("main") }
@@ -58,7 +59,7 @@ fun RamadanPanel(state: RamadanState, busy: Boolean, message: String?, touchMode
         eid = d?.eid?.format(DateTimeFormatter.BASIC_ISO_DATE) ?: ""; source = d?.source ?: ""; approved = d?.approved ?: false; page = "dates"
     }
     val preview = runCatching { previewDates() }
-    val status = ramadanStatus(Instant.now(), draft, clockProblem)
+    val status = ramadanStatus(Instant.now(), draft, clockProblem, zone)
     val previewText = ramadanText(status, BoardLanguage.BOTH) ?: (status as? RamadanStatus.Hidden)?.reason ?: "Блок выключен"
     val entries = when {
         error != null -> listOf(SettingsAction("Понятно", error!!) { error = null })
@@ -85,7 +86,7 @@ fun RamadanPanel(state: RamadanState, busy: Boolean, message: String?, touchMode
             },
         ) + if (original != null) listOf(SettingsAction("Удалить этот период") { page = "delete" }) else emptyList()
         else -> listOf(
-            SettingsAction("Показывать блок Рамадана", "По умолчанию выключен. Считает календарные дни Europe/Moscow до первого дня поста.", checked = draft.enabled) { draft = draft.copy(enabled = !draft.enabled) },
+            SettingsAction("Показывать блок Рамадана", "По умолчанию выключен. Считает местные календарные дни мечети до первого дня поста.", checked = draft.enabled) { draft = draft.copy(enabled = !draft.enabled) },
             SettingsAction("Предпросмотр на дату устройства", previewText, false, informational = true) {},
             SettingsAction("Добавить даты Рамадана", "Без автоматически заданных дат и источников") { edit(null) },
         ) + draft.dates.sortedBy { it.firstFast }.map { d -> SettingsAction("Период ${d.year}: ${d.firstFast}", "Ураза-байрам: ${d.eid ?: "не задан"} · ${if (d.approved) "подтверждён" else "не подтверждён"} · ${d.source}") { edit(d) } } +
@@ -96,5 +97,5 @@ fun RamadanPanel(state: RamadanState, busy: Boolean, message: String?, touchMode
         SettingsAction("Подтвердить откат дат", "Текущие даты станут резервными") { rollingBack = true; onRollback() }) else entries
     SettingsMenu(if (page == "dates") "Даты Рамадана" else if (page == "confirm") "Проверка настроек Рамадана" else "Рамадан", actual, touchMode, busy,
         onBack = ::back, onSave = if (page == "main" && message == null && error == null) ({ page = "confirm" }) else null,
-        notice = state.problem ?: "Europe/Moscow · Даты независимы от расписания намазов · Нет автоматически утверждённых дат", tag = "ramadan")
+        notice = state.problem ?: "Даты независимы от расписания намазов · Нет автоматически утверждённых дат", tag = "ramadan")
 }

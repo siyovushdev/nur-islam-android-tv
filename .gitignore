@@ -19,3 +19,6 @@ __pycache__/
 /distributions/
 /phone-emulator-results/
 /tv-emulator-results/
+
+/product-emulator-results/
+/release-emulator-results/

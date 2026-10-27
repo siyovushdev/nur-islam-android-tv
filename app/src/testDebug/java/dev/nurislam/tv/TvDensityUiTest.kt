@@ -48,10 +48,9 @@ class TvDensityUiTest {
                 }
             }
         }
-        compose.onRoot().performKeyInput { pressKey(Key.DirectionDown); pressKey(Key.Enter) }
         for (theme in BoardThemeId.entries) for (mode in listOf(DisplayMode.LANDSCAPE, DisplayMode.PORTRAIT_ROTATE_CW, DisplayMode.PORTRAIT_ROTATE_CCW)) {
             compose.runOnIdle { settings.value = settings.value.copy(theme = theme, displayMode = mode) }
-            compactLines(compose.onNodeWithText("OK — переключить Elegant / Classic", useUnmergedTree = true))
+            compactLines(compose.onNodeWithText("Один JSON: икамат, Джума, Рамадан и события", useUnmergedTree = true))
         }
     }
     @Test fun multilineWizardFactsDoNotInheritFixedBodyLineHeight() {

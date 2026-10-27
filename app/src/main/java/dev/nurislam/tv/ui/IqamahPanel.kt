@@ -38,7 +38,7 @@ fun IqamahPanel(state: IqamahState, schedules: ScheduleState, busy: Boolean, mes
     var initialized by remember { mutableStateOf(state.loaded) }
     var page by remember { mutableStateOf("main") }
     var prayer by remember { mutableStateOf(IqamahPrayer.FAJR) }
-    var date by remember { mutableStateOf(Instant.now().atZone(MoscowZone).toLocalDate().toString()) }
+    var date by remember { mutableStateOf(Instant.now().atZone(schedules.zone).toLocalDate().toString()) }
     var exception by remember { mutableStateOf(false) }
     var mode by remember { mutableStateOf(IqamahMode.OFF) }
     var value by remember { mutableStateOf("") }
@@ -89,12 +89,12 @@ fun IqamahPanel(state: IqamahState, schedules: ScheduleState, busy: Boolean, mes
         originalRule = r
         mode = r?.mode ?: IqamahMode.OFF
         value = r?.let { if (it.mode == IqamahMode.FIXED) "%02d:%02d".format(it.value / 60, it.value % 60) else if (it.mode == IqamahMode.OFFSET) it.value.toString() else "" } ?: ""
-        date = r?.from?.toString() ?: Instant.now().atZone(MoscowZone).toLocalDate().toString()
+        date = r?.from?.toString() ?: Instant.now().atZone(schedules.zone).toLocalDate().toString()
         exception = r?.exception ?: false
         base = r?.baseCalendar != null && r.baseCalendar == schedules.scheduleFor(LocalDate.parse(date))?.let { calendarFingerprint(it.json) }
         page = "rule"
     }
-    val today = Instant.now().atZone(MoscowZone).toLocalDate()
+    val today = Instant.now().atZone(schedules.zone).toLocalDate()
     val conflicts = if (page == "confirm") remember(draft, schedules, today) { iqamahConflicts(draft, schedules, today) } else emptyList()
     val boundaryWarnings = if (page == "confirm") remember(draft, schedules, today) { iqamahBoundaryWarnings(draft, schedules, today) } else emptyList()
     val canSave = !draft.enabled || conflicts.isEmpty()
@@ -135,17 +135,17 @@ fun IqamahPanel(state: IqamahState, schedules: ScheduleState, busy: Boolean, mes
         page == "history" -> listOf(SettingsAction("Назад") { page = "main" }) + draft.rules.sortedWith(compareBy({ it.from }, { it.prayer.ordinal })).map { r ->
             SettingsAction("${r.prayer.title}: ${ruleLabel(r)}", "${if (r.exception) "Исключение" else "С"} ${r.from} · OK — редактировать") { prayer = r.prayer; editRule(r) }
         }
-        page == "today" -> iqamahDay(Instant.now().atZone(MoscowZone).toLocalDate(), draft, schedules).map { row ->
-            SettingsAction(row.prayer.title, "Начало: ${row.start?.atZone(MoscowZone)?.toLocalTime()?.let(::formatTime) ?: "не подтверждено"} · Икамат: ${row.event?.at?.atZone(MoscowZone)?.toLocalTime()?.let(::formatTime) ?: "—"}\n${row.detail}", false, informational = true) {}
+        page == "today" -> iqamahDay(Instant.now().atZone(schedules.zone).toLocalDate(), draft, schedules).map { row ->
+            SettingsAction(row.prayer.title, "Начало: ${row.start?.atZone(schedules.zone)?.toLocalTime()?.let(::formatTime) ?: "не подтверждено"} · Икамат: ${row.event?.at?.atZone(schedules.zone)?.toLocalTime()?.let(::formatTime) ?: "—"}\n${row.detail}", false, informational = true) {}
         }
         else -> listOf(
             SettingsAction("Функция икамата", "По умолчанию отключена, все пять правил пусты", checked = draft.enabled) { change { it.copy(enabled = !it.enabled) } },
             SettingsAction("Источник правил: ${draft.source.ifBlank { "не указан" }}", "Протокол/решение администрации; тестовая запись не становится официальной") { textEdit = true },
-            SettingsAction("Правила утверждены мечетью", "Изменение параметров снимает подтверждение. Без него только демонстрация Debug; Release не запускает икамат.", draft.source.isNotBlank() && !isTestSource(draft.source), draft.approved) { draft = draft.copy(approved = !draft.approved) },
+            SettingsAction("Правила утверждены мечетью", "Изменение параметров снимает подтверждение. Неподтверждённые ручные правила не исполняются. Для нового календаря используйте загрузку готового файла.", draft.source.isNotBlank() && !isTestSource(draft.source), draft.approved) { draft = draft.copy(approved = !draft.approved) },
             SettingsAction("Затемнение: ${if (draft.dimMinutes == 0) "выключено" else "${draft.dimMinutes} мин"}", "Не меняет время икамата. Без затемнения надпись «Икамат» показывается 60 секунд.") { number = "dim" },
-            SettingsAction("Часы проверены", "${if (clockProblem) "Обнаружен скачок времени! " else ""}Табло Europe/Moscow; система ${Instant.now()}. Исправьте часы Android, затем подтвердите.") { onClockConfirm() },
+            SettingsAction("Часы проверены", "${if (clockProblem) "Обнаружен скачок времени! " else ""}Табло ${schedules.zone.id}; система ${Instant.now()}. Исправьте часы Android, затем подтвердите.") { onClockConfirm() },
         ) + IqamahPrayer.entries.map { p ->
-            val effective = draft.rule(p, Instant.now().atZone(MoscowZone).toLocalDate())
+            val effective = draft.rule(p, Instant.now().atZone(schedules.zone).toLocalDate())
             SettingsAction(p.title, "${effective?.let { ruleLabel(it) + " · " + (if (it.exception) "исключение " else "с ") + it.from } ?: "Не настроено"}. OK — новое изменение / исключение.") { prayer = p; editRule() }
         } + listOf(
             SettingsAction("Сегодня: начало / икамат / правило") { page = "today" },
@@ -158,7 +158,7 @@ fun IqamahPanel(state: IqamahState, schedules: ScheduleState, busy: Boolean, mes
         return
     }
     val footerSave = if (page == "main" && draft != state.config) ({ page = "confirm" }) else null
-    SettingsMenu(when (page) { "rule" -> "Икамат: ${prayer.title}"; "today" -> "Сегодня · Europe/Moscow"; "history" -> "Изменения и исключения"; "confirm" -> "Сохранить правила?"; else -> "Икамат${if (draft != state.config) " · черновик" else ""}" },
+    SettingsMenu(when (page) { "rule" -> "Икамат: ${prayer.title}"; "today" -> "Сегодня · ${schedules.zone.id}"; "history" -> "Изменения и исключения"; "confirm" -> "Сохранить правила?"; else -> "Икамат${if (draft != state.config) " · черновик" else ""}" },
         entries, touchMode, busy, onBack = ::back, onSave = footerSave,
         notice = state.problem ?: if (!draft.approved) "ТЕСТОВЫЕ ПРАВИЛА · не утверждены мечетью" else "Источник: ${draft.source}")
 }

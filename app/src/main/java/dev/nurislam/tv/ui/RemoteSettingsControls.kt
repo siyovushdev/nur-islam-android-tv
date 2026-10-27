@@ -26,10 +26,10 @@ import androidx.compose.ui.unit.sp
 internal data class SettingsAction(val title: String, val detail: String = "", val enabled: Boolean = true, val checked: Boolean? = null, val informational: Boolean = false, val click: () -> Unit)
 
 @Composable
-internal fun SettingsMenu(title: String, actions: List<SettingsAction>, touch: Boolean, busy: Boolean, onBack: () -> Unit, onSave: (() -> Unit)? = null, notice: String? = null, tag: String = "iqamah") {
+internal fun SettingsMenu(title: String, actions: List<SettingsAction>, touch: Boolean, busy: Boolean, onBack: () -> Unit, onSave: (() -> Unit)? = null, notice: String? = null, tag: String = "iqamah", focusToken: Any? = null, skipInformation: Boolean = false) {
     var index by remember(title, actions.size) { mutableIntStateOf(actions.indexOfFirst { it.enabled }.takeIf { it >= 0 } ?: actions.size) }
     val focus = remember { FocusRequester() }; val scroll = rememberLazyListState()
-    LaunchedEffect(title) { focus.requestFocus() }
+    LaunchedEffect(title, focusToken) { focus.requestFocus() }
     LaunchedEffect(index, title) { if (actions.isNotEmpty() && index < actions.size) scroll.scrollToItem(index) }
     BackHandler { if (!busy) onBack() }
     BoxWithConstraints(Modifier.fillMaxSize().background(LocalBoardAppearance.current.Deep).testTag("$tag-panel")
@@ -38,8 +38,12 @@ internal fun SettingsMenu(title: String, actions: List<SettingsAction>, touch: B
             val handled = key.keyCode in listOf(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BACK)
             val count = actions.size + 1 + if (onSave != null) 1 else 0
             if (handled && key.action == KeyEvent.ACTION_DOWN && !busy) when (key.keyCode) {
-                KeyEvent.KEYCODE_DPAD_DOWN -> index = (index + 1) % count
-                KeyEvent.KEYCODE_DPAD_UP -> index = (index + count - 1) % count
+                KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_UP -> {
+                    val direction = if (key.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1
+                    // Information has no action or visible focus. Back always remains reachable.
+                    do { index = (index + count + direction) % count }
+                    while (skipInformation && index < actions.size && actions[index].informational)
+                }
                 KeyEvent.KEYCODE_BACK -> onBack()
                 else -> when {
                     index < actions.size -> actions[index].let { if (it.enabled) it.click() }
@@ -58,21 +62,22 @@ internal fun SettingsMenu(title: String, actions: List<SettingsAction>, touch: B
             LazyColumn(state = scroll, modifier = Modifier.weight(1f).fillMaxWidth().testTag("$tag-list"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 itemsIndexed(actions) { i, a ->
                     val shape = RoundedCornerShape(8.dp)
+                    val active = index == i && !a.informational
                     val m = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { this[ImportActionHighlighted] = index == i }
-                        .border(if (index == i) 2.dp else 0.dp, c.Gold, shape).background(if (a.informational) androidx.compose.ui.graphics.Color.Transparent else c.Card, shape)
+                        .border(if (active) 2.dp else 1.dp, if (active) c.Gold else if (a.informational) androidx.compose.ui.graphics.Color.Transparent else c.Outline.copy(alpha=.25f), shape).background(if (a.informational) androidx.compose.ui.graphics.Color.Transparent else if(active) c.Gold else c.Card, shape)
                     Row((if (a.informational) m else if (a.checked != null) m.toggleable(a.checked, enabled = a.enabled && !busy, role = Role.Checkbox) { index = i; a.click() }
                         else m.clickable(enabled = a.enabled && !busy, role = Role.Button) { index = i; a.click() }).heightIn(min = 48.dp).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         if (a.checked != null) Checkbox(a.checked, onCheckedChange = null, enabled = a.enabled && !busy)
                         Column(Modifier.weight(1f)) {
-                            Text(a.title, color = if (a.enabled) c.Text else c.Secondary, fontSize = (30 * s).sp, fontWeight = FontWeight.Bold)
-                            if (a.detail.isNotEmpty()) Text(a.detail, color = c.Secondary, fontSize = (24 * s).sp)
+                            Text(a.title, color = if(active) c.Deep else if (a.enabled) c.Text else c.Secondary, fontSize = (30 * s).sp, fontWeight = FontWeight.Bold)
+                            if (a.detail.isNotEmpty()) Text(a.detail, color = if(active) c.Deep else c.Secondary, fontSize = (24 * s).sp)
                         }
                     }
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onBack, enabled = !busy, modifier = Modifier.weight(1f).border(if (index == actions.size) 2.dp else 0.dp, c.Gold)) { Text("Назад / отмена", color = c.Gold) }
-                if (onSave != null) Button(onClick = onSave, enabled = !busy, modifier = Modifier.weight(1f).testTag("$tag-save").border(if (index > actions.size) 2.dp else 0.dp, c.Gold)) { Text("Сохранить") }
+                OutlinedButton(onClick = onBack, enabled = !busy, modifier = Modifier.weight(1f).border(if (index == actions.size) 2.dp else 0.dp, c.Gold)) { Text("Назад", color = c.Gold, fontSize = (28*s).sp) }
+                if (onSave != null) Button(onClick = onSave, enabled = !busy, modifier = Modifier.weight(1f).testTag("$tag-save").border(if (index > actions.size) 2.dp else 0.dp, c.Gold)) { Text("Сохранить", fontSize = (28*s).sp) }
             }
         }
     }

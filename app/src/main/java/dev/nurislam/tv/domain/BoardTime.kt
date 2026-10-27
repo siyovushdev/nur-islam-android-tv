@@ -22,7 +22,7 @@ fun nextPrayer(now: Instant, days: List<DaySchedule>, meaning: FajrMeaning = Faj
     (prayerStatus(now, days, meaning) as? PrayerStatus.Upcoming)?.prayer
 
 fun formatTime(time: LocalTime): String = timeFormat.format(time)
-fun formatClock(now: Instant): String = formatTime(now.atZone(MoscowZone).toLocalTime())
+fun formatClock(now: Instant, zone: java.time.ZoneId = MoscowZone): String = formatTime(now.atZone(zone).toLocalTime())
 fun formatRussianDate(date: LocalDate): String = ruDate.format(date).replaceFirstChar { it.titlecase(Locale.forLanguageTag("ru")) }
 fun formatTatarDate(date: LocalDate): String = "${ttDays[date.dayOfWeek.value - 1]}, ${date.dayOfMonth} ${ttMonths[date.monthValue - 1]} ${date.year}"
 fun formatCountdown(now: Instant, target: Instant): String {

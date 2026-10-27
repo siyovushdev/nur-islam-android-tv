@@ -25,7 +25,7 @@ jobs:
       - name: Build and verify all variants
         run: |
           code=$((1000 + GITHUB_RUN_NUMBER * 2))
-          ./gradlew -PnurIslamVersionCode="$code" :app:assembleDebug :app:assembleRelease :app:assemblePhoneDebug :app:test :app:lintDebug :app:lintRelease :app:lintPhoneDebug :app:assembleDebugAndroidTest
+          ./gradlew -PnurIslamVersionCode="$code" :app:assembleDebug :app:assembleRelease :app:assemblePhoneRelease :app:assemblePhoneDebug :app:test :app:lintDebug :app:lintRelease :app:lintPhoneRelease :app:lintPhoneDebug :app:assembleDebugAndroidTest
           mkdir -p test-binaries/base test-binaries/updated
           cp app/build/outputs/apk/debug/app-debug.apk test-binaries/base/tv.apk
           cp app/build/outputs/apk/phoneDebug/app-phoneDebug.apk test-binaries/base/phone.apk
@@ -159,8 +159,7 @@ jobs:
           profile: pixel_5
           disable-animations: true
           script: |
-            python3 scripts/check-phone-apk.py phone-apk/Nur-Islam-Phone-Debug.apk --baseline support/phone-baseline.apk
-            python3 scripts/check-emulator-home.py home-apk/Nur-Islam-TV-Debug.apk
+            python3 scripts/check-product-apk.py phone-apk/Nur-Islam-Phone-Debug.apk --baseline support/phone-baseline.apk --package dev.nurislam.tv.phone.debug --output phone-emulator-results
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -185,7 +184,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Native Android TV installation/update, D-pad and safe HOME round-trip
+      - name: Native Android TV installation/update and D-pad (HOME unchanged)
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -199,3 +198,76 @@ jobs:
         with:
           name: tv-emulator-install
           path: tv-emulator-results/
+
+  release-install:
+    # GitHub only exposes draft releases to tokens with push access.
+    permissions:
+      contents: write
+    needs: build
+    if: github.event_name == 'pull_request' && github.head_ref == 'codex/simple-mosque-calendar'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: Phone
+            package: dev.nurislam.tv.phone
+            api: 35
+            target: default
+            arch: x86_64
+            profile: pixel_5
+          - variant: TV
+            package: dev.nurislam.tv
+            api: 34
+            target: android-tv
+            arch: x86
+            profile: tv_1080p
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exact externally signed RC and previous public RC
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p release-apk previous-apk
+          gh release download v0.4.0-rc1 --dir release-apk
+          gh release download v0.3.0-rc3 --pattern 'Nur-Islam-*-Release.apk' --dir previous-apk
+          test "$(cat release-apk/SOURCE_SHA.txt)" = "$SOURCE_SHA"
+          cd release-apk
+          sha256sum -c SHA256SUMS.txt
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          log-accepted-android-sdk-licenses: false
+      - name: Verify final Release identities, flags and signatures
+        run: |
+          python3 scripts/check-apk-manifests.py release-apk/Nur-Islam-TV-Release.apk release-apk/Nur-Islam-Phone-Release.apk --release
+          for apk in release-apk/*-Release.apk; do
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$apk" > "$apk.verify.txt"
+            grep -F "$(cat config/release-signing-cert.sha256)" "$apk.verify.txt"
+          done
+      - name: Enable KVM on the disposable CI runner
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        env:
+          NUR_ISLAM_SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.target }}
+          arch: ${{ matrix.arch }}
+          profile: ${{ matrix.profile }}
+          disable-animations: true
+          script: python3 scripts/check-product-apk.py release-apk/Nur-Islam-${{ matrix.variant }}-Release.apk --baseline previous-apk/Nur-Islam-${{ matrix.variant }}-Release.apk --package ${{ matrix.package }} --output release-emulator-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-${{ matrix.variant }}-acceptance
+          path: release-emulator-results/

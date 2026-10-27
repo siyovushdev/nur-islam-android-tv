@@ -41,24 +41,14 @@ class XlsxImportUiTest {
         }
     }
     private fun key(key: Key) = compose.onRoot().performKeyInput { pressKey(key) }
-    @Test fun completeExcelPreviewRequiresExplicitConfirmationAndKeepsTestIdentityOnPhone() {
-        val value = ScheduleXlsx.parse(ScheduleXlsxTest.source(), BuildConfig.PHONE_PREVIEW)
-        var applied: ValidatedSchedule? = null
-        compose.activity.setContent { NurIslamTheme { ScheduleImportPreview(value, ScheduleState(), false, BuildConfig.PHONE_PREVIEW,
-            onApply = { applied = ScheduleImport.confirmExcel(value) }, onCancel = {}) } }
-        compose.onNodeWithTag("import-excel-notice").assertExists()
-        compose.onNodeWithTag("import-apply").assertIsNotEnabled()
-        captureImport("xlsx-preview-unconfirmed")
-        if (BuildConfig.PHONE_PREVIEW) {
-            compose.onNodeWithText("Понимаю: тестовое расписание не утверждено мечетью").assertIsDisplayed()
-            compose.onNodeWithTag("import-confirmation").performClick()
-            compose.onNodeWithTag("import-apply").performClick()
-        } else {
-            key(Key.DirectionDown); key(Key.Enter); key(Key.DirectionDown); key(Key.Enter)
-        }
-        compose.runOnIdle { assertTrue(applied!!.metadata.approved); assertEquals(BuildConfig.PHONE_PREVIEW, isTestSource(applied!!.metadata.source)) }
-        compose.onNodeWithTag("import-apply").assertIsDisplayed()
-        captureImport("xlsx-preview-confirmed")
+    @Test fun completeExcelPreviewAppliesOnceWithoutChangingProvenanceOrTimes() {
+        val value=ScheduleImport.parse(ScheduleXlsxTest.source(),sourceName="calendar.xlsx")
+        var applied: ValidatedSchedule?=null
+        compose.activity.setContent { NurIslamTheme { ScheduleImportPreview(value,ScheduleState(),false,BuildConfig.PHONE_PREVIEW,{ applied=value },{}) } }
+        compose.onNodeWithTag("import-apply").assertIsEnabled();assertNull(applied)
+        captureImport("xlsx-simple-preview");key(Key.Enter)
+        assertEquals(value.days,applied!!.days);assertFalse(applied!!.metadata.approved)
+        assertFalse(isTestSource(applied!!.metadata.source))
     }
     @Test fun folderSupportsDpadNavigationBackAndTouchWithoutOpeningFilesAutomatically() {
         val root = Uri.parse("content://example.documents/tree/root")
@@ -82,15 +72,12 @@ class XlsxImportUiTest {
         compose.onNodeWithText("Папка недоступна:", substring = true).assertExists()
         key(Key.DirectionDown); key(Key.Enter); assertTrue(reselected)
     }
-    @Test fun explicitlyTestNamedExcelCannotBecomeOfficialInTvButPhoneCanAcknowledgeDemo() {
-        val candidate = ScheduleImport.parse(ScheduleXlsxTest.source(), sourceName = "ТЕСТ ДЛЯ ТЕЛЕФОНА.xlsx")
-        var applied = false
-        assertTrue(isTestSource(candidate.metadata.source)); assertFalse(candidate.metadata.approved)
-        compose.activity.setContent { NurIslamTheme { ScheduleImportPreview(candidate, ScheduleState(), false, BuildConfig.PHONE_PREVIEW, { applied = true }, {}) } }
-        compose.onNodeWithTag("import-apply").assertIsNotEnabled()
-        key(Key.DirectionDown); key(Key.Enter); key(Key.DirectionDown); key(Key.Enter)
-        assertEquals(BuildConfig.PHONE_PREVIEW, applied)
-        if (!BuildConfig.PHONE_PREVIEW) compose.onNodeWithTag("import-confirmation").assertIsNotEnabled().assertIsOff()
+    @Test fun explicitlyTestNamedExcelRemainsMarkedOnBothVariants() {
+        val candidate=ScheduleImport.parse(ScheduleXlsxTest.source(),sourceName="ТЕСТ ДЛЯ ТЕЛЕФОНА.xlsx")
+        var applied=false
+        compose.activity.setContent { NurIslamTheme { ScheduleImportPreview(candidate,ScheduleState(),false,BuildConfig.PHONE_PREVIEW,{ applied=true },{}) } }
+        compose.onNodeWithTag("import-source-warning").assertIsDisplayed();key(Key.Enter);assertTrue(applied)
+        assertTrue(isTestSource(candidate.metadata.source));assertFalse(candidate.metadata.approved)
     }
     @Test fun invalidSavedFolderUriOffersReselectionWithoutCrashing() {
         var selected = false
@@ -106,7 +93,7 @@ class XlsxImportUiTest {
         val current = ScheduleFixtures.schedule(year + 1)
         val future = ScheduleFixtures.schedule(year + 2)
         compose.activity.setContent { NurIslamTheme { ScheduleImportPreview(future, ScheduleState(current, previous, true), false, BuildConfig.PHONE_PREVIEW, {}, {}) } }
-        compose.onNodeWithTag("import-displaces-current-year").performScrollTo().assertExists()
+        compose.onNodeWithText("Для сегодняшнего табло нужно расписание", substring=true).assertExists()
     }
     @Test fun importRetainingCalendarForTodayDoesNotShowEvictionWarning() {
         val year = java.time.Instant.now().atZone(dev.nurislam.tv.model.MoscowZone).year
@@ -116,13 +103,7 @@ class XlsxImportUiTest {
     @Test fun activityImportsExcelAndRestoresExactOriginalTimesAfterRestartAndRollback() {
         val app = compose.activity.application as NurIslamApplication
         compose.waitUntil(10_000) { app.schedules.state.value.loaded }
-        if (BuildConfig.PHONE_PREVIEW) compose.onNodeWithTag("phone-settings").performClick()
-        else {
-            compose.onNodeWithText("Пропустить и открыть табло").performClick()
-            repeat(5) { key(Key.DirectionCenter) }; key(Key.DirectionDown); key(Key.Enter)
-        }
-        compose.onNodeWithTag("admin-list").performScrollToNode(hasText("Расписание"))
-        compose.onNodeWithText("Расписание").performClick()
+        compose.onNodeWithTag("board-settings").performClick()
         val file = File(app.cacheDir, "calendar-kazan.xlsx").apply { writeBytes(ScheduleXlsxTest.source()) }
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[BoardViewModel::class.java]
         compose.runOnIdle { vm.import(Uri.fromFile(file)) }
@@ -130,12 +111,6 @@ class XlsxImportUiTest {
         val original = vm.candidate.value!!
         assertFalse(original.metadata.approved)
         assertEquals(365, original.days.size)
-        compose.runOnIdle { vm.applyCandidate() }
-        compose.waitUntil(10_000) { shadowOf(android.os.Looper.getMainLooper()).idle(); !vm.busy.value }
-        assertNull(app.schedules.state.value.current)
-        assertTrue(vm.message.value!!.contains("Сначала подтвердите"))
-        compose.runOnIdle { vm.dismissMessage() }
-        compose.onNodeWithTag("import-confirmation").performClick()
         compose.onNodeWithTag("import-apply").performClick()
         compose.waitUntil(10_000) { shadowOf(android.os.Looper.getMainLooper()).idle(); !vm.busy.value }
         assertEquals(original.days, app.schedules.state.value.current!!.days)

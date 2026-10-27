@@ -43,7 +43,8 @@ class NativeIntegrationTest {
         }
         runBlocking { app.settings.update { it.copy(mosqueName = "ПРОВЕРКА НА ЭМУЛЯТОРЕ") } }
     }
-    private fun settings() { key(Key.DirectionCenter, 5); key(Key.DirectionDown); key(Key.Enter); compose.onNodeWithText("Тема:", substring = true).assertExists() }
+    private fun settings() { key(Key.DirectionCenter); compose.onNodeWithText("Загрузить расписание").assertExists() }
+    private fun tap(s: String) { compose.onNodeWithTag("admin-list").performScrollToNode(hasText(s)); compose.onNodeWithText(s).performClick(); waitIo() }
     private fun screenshot(name: String) {
         val file = File(app.filesDir, "qa-screenshots/$name.png").apply { parentFile!!.mkdirs() }
         val image = compose.onRoot().captureToImage().asAndroidBitmap()
@@ -61,14 +62,11 @@ class NativeIntegrationTest {
         }
         json.delete(); inbox.writeBytes(bytes)
         try {
-            settings(); key(Key.DirectionDown, 7); key(Key.Enter)
-            key(Key.DirectionDown, 2); key(Key.Enter); waitIo()
+            settings(); tap("Для специалиста"); tap("Резервный импорт из папки приложения")
             compose.onNodeWithTag("import-preview").assertExists()
-            compose.onNodeWithTag("import-apply").assertIsNotEnabled()
+            compose.onNodeWithTag("import-apply").assertIsEnabled()
             screenshot("xlsx-unconfirmed")
-            key(Key.DirectionDown); key(Key.Enter)
-            compose.onNodeWithTag("import-confirmation").assertIsOn()
-            key(Key.DirectionDown); key(Key.Enter); waitIo()
+            key(Key.Enter); waitIo()
             val first = app.schedules.state.value.current!!
             val lines = assets.open("xlsx/kazan-2026.tsv").bufferedReader().use { it.readLines() }
             var compared = 0
@@ -80,29 +78,27 @@ class NativeIntegrationTest {
             assertEquals(2920, compared)
             assertEquals(FajrMeaning.UNCONFIRMED, first.fajrMeaning)
             screenshot("xlsx-applied")
-            compose.onNodeWithText("К расписанию").performClick()
+            compose.onNodeWithText("Вернуться к табло").performClick()
             inbox.delete()
             val second = com.google.gson.JsonParser.parseString(first.json).asJsonObject.apply { addProperty("revision", "native-generation-2") }
             json.writeText(second.toString())
-            key(Key.DirectionDown, 2); key(Key.Enter); waitIo()
-            key(Key.DirectionDown); key(Key.Enter); key(Key.DirectionDown); key(Key.Enter); waitIo()
+            settings(); tap("Для специалиста"); tap("Резервный импорт из папки приложения"); key(Key.Enter); waitIo()
             assertEquals("native-generation-2", app.schedules.state.value.current!!.metadata.revision)
-            compose.onNodeWithText("К расписанию").performClick()
-            key(Key.DirectionDown, 3); key(Key.Enter); key(Key.DirectionDown); key(Key.Enter); waitIo()
+            compose.onNodeWithText("Вернуться к табло").performClick()
+            settings(); tap("Загруженные данные"); tap("Вернуть предыдущее расписание")
             assertEquals(first.json, app.schedules.state.value.current!!.json)
-            compose.onNodeWithText("Понятно").performClick()
-            key(Key.Back); key(Key.Back)
+            compose.onNodeWithText("Вернуться к табло").performClick()
             screenshot("xlsx-rollback-board")
         } finally { inbox.delete(); json.delete() }
     }
     @Test fun dpadSettingsThemesAllRotationsScalesAndRecreateKeepRowsInsideScreen() {
         board(); settings()
         val original = app.settings.state.value.theme
-        key(Key.DirectionDown); key(Key.Enter); waitIo()
+        tap("Внешний вид"); key(Key.Enter); waitIo()
         assertNotEquals(original, app.settings.state.value.theme)
         key(Key.DirectionDown, 2); key(Key.Enter); waitIo()
         val scale = app.settings.state.value.textScale
-        key(Key.Back); compose.activityRule.scenario.recreate()
+        key(Key.Back); key(Key.Back); compose.activityRule.scenario.recreate()
         assertEquals(scale, app.settings.state.value.textScale)
         for (theme in BoardThemeId.entries) for (mode in listOf(DisplayMode.AUTO, DisplayMode.LANDSCAPE, DisplayMode.PORTRAIT_ROTATE_CW, DisplayMode.PORTRAIT_ROTATE_CCW)) for (size in listOf(.85f, 1f, 1.15f)) {
             runBlocking { app.settings.update { it.copy(theme = theme, displayMode = mode, textScale = size) } }
@@ -120,8 +116,7 @@ class NativeIntegrationTest {
         runBlocking { app.ramadan.save(RamadanConfig(false, listOf(dates))) }
         val calendar = app.schedules.state.value.current?.json
         settings()
-        compose.onNodeWithTag("admin-list").performScrollToNode(hasText("Рамадан"))
-        compose.onNodeWithText("Рамадан").performClick()
+        tap("Для специалиста"); tap("Ручные даты Рамадана (прежний способ)")
         key(Key.Enter); key(Key.DirectionDown, 3); key(Key.Enter)
         key(Key.DirectionDown, 3); key(Key.Enter)
         compose.onNodeWithText("Даты утверждены мечетью").assertIsOn()

@@ -3,15 +3,12 @@ package dev.nurislam.tv
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.nurislam.tv.data.*
-import dev.nurislam.tv.model.ScheduleEvent
 import dev.nurislam.tv.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -25,124 +22,52 @@ import java.io.File
 @Config(sdk = [26, 35])
 class PhoneImportReviewTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
-    private var applications = 0
-    private var cancellations = 0
-    private val busy = mutableStateOf(false)
-    private fun candidate(approved: Boolean = true, test: Boolean = false): ValidatedSchedule {
-        // Fabricated UI fixtures only; source labels exercise the approval states, not authenticity.
-        val json = ScheduleFixtures.json(approved = approved).apply {
-            addProperty("source", if (test) "ТЕСТ ДЛЯ ТЕЛЕФОНА: конвертация Excel" else "Календарь мечети, протокол 42")
-        }
-        return ScheduleJson.parse(json.toString().toByteArray())
+    private var applied=0; private var cancelled=0
+    private val busy=mutableStateOf(false)
+    private fun show(source: String="Календарь из файла", approved: Boolean=false) {
+        val candidate=ScheduleJson.parse(ScheduleFixtures.json(approved=approved).apply { addProperty("source",source) }.toString().toByteArray())
+        compose.activity.setContent { NurIslamTheme { ScheduleImportPreview(candidate,ScheduleState(),busy.value,BuildConfig.PHONE_PREVIEW,{ applied++ },{ cancelled++ }) } }
     }
-    private fun show(test: Boolean = false, approved: Boolean = true) {
-        val value = candidate(approved, test)
-        compose.activity.setContent {
-            NurIslamTheme { ScheduleImportPreview(value, ScheduleState(), busy.value, true,
-                onApply = { applications++ }, onCancel = { cancellations++ }) }
-        }
-    }
+    private fun key(k: Key)=compose.onRoot().performKeyInput { pressKey(k) }
     private fun image(name: String) {
-        val file = File(System.getProperty("nurIslam.screenshotDir"), "$name-api${android.os.Build.VERSION.SDK_INT}.png")
-        file.parentFile!!.mkdirs()
+        if(android.os.Build.VERSION.SDK_INT!=35)return
         compose.runOnIdle {
-            val view = compose.activity.window.decorView
-            val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-            view.draw(Canvas(bitmap))
-            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            val v=compose.activity.window.decorView;val b=Bitmap.createBitmap(v.width,v.height,Bitmap.Config.ARGB_8888);v.draw(Canvas(b))
+            val f=File(System.getProperty("nurIslam.screenshotDir"),"$name-${BuildConfig.BUILD_TYPE}.png");f.parentFile!!.mkdirs();f.outputStream().use { b.compress(Bitmap.CompressFormat.PNG,100,it) }
         }
     }
-    private fun key(key: Key) = compose.onRoot().performKeyInput { pressKey(key) }
-    @Test fun touchCheckboxControlsPrimaryActionAndTableHasNoClickActions() {
-        show()
-        compose.onNodeWithText("Проверка расписания").assertIsDisplayed()
-        compose.onNodeWithTag("import-confirmation").assertIsOff()
-        compose.onNodeWithTag("import-apply").assertIsNotEnabled().performClick()
-        assertEquals(0, applications)
-        image("import-after-unconfirmed")
-        val expectedTimes = listOf("05:08", "05:30", "07:12", "11:40", "12:05", "15:15", "17:48", "19:02")
-        ScheduleEvent.entries.forEachIndexed { index, event ->
-            compose.onNodeWithTag("import-row-${event.name}").performScrollTo().assertHasNoClickAction()
-                .assert(hasAnyDescendant(hasText(expectedTimes[index])))
-        }
-        compose.onNodeWithTag("import-apply").assertIsDisplayed()
-        compose.onNodeWithTag("import-cancel").assertIsDisplayed()
-        compose.onNodeWithTag("import-confirmation").performClick().assertIsOn()
-        compose.onNodeWithTag("import-apply").assertIsEnabled().performClick()
-        assertEquals(1, applications)
-        image("import-after-confirmed")
-        compose.onNodeWithTag("import-confirmation").performClick().assertIsOff()
-        compose.onNodeWithTag("import-apply").assertIsNotEnabled()
+    @Test fun validFileNeedsOnlyApplyAndNoApprovalControl() {
+        show();compose.onNodeWithTag("import-apply").assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithTag("import-confirmation").assertDoesNotExist()
+        image("simple-import-summary")
+        compose.onNodeWithTag("import-apply").performClick();assertEquals(1,applied)
     }
-    @Test fun approvedPhoneTestSourceNeedsExplicitDemoAcknowledgement() {
-        assertFalse(isTestScheduleSource("Latest calendar, протокол 42"))
-        assertTrue(isTestScheduleSource("ТЕСТ ДЛЯ ТЕЛЕФОНА"))
-        show(test = true)
-        compose.onNodeWithTag("import-source-warning").assertTextContains("ТЕСТОВЫЙ", substring = true)
+    @Test fun detailsAreInformationAndActionsRemainVisible() {
+        show("Источник ".repeat(20));compose.onNodeWithTag("import-details").performClick()
+        compose.onNodeWithTag("import-information").performTouchInput { swipeUp() }
+        compose.onNodeWithTag("import-apply").assertIsDisplayed();compose.onNodeWithTag("import-cancel").assertIsDisplayed()
+        compose.onNodeWithText("Времена на",substring=true).assertHasNoClickAction()
+        image("simple-import-details")
+    }
+    @Test fun dpadStartsOnApplyAndCanCancelWithoutPublishing() {
+        show();compose.onNodeWithTag("import-apply").assert(SemanticsMatcher.expectValue(ImportActionHighlighted,true))
+        key(Key.DirectionUp);key(Key.Enter);assertEquals(1,cancelled);assertEquals(0,applied)
+    }
+    @Test fun dpadAppliesExactlyOnceAndBusyCannotApplyOrCancel() {
+        show();key(Key.Enter);assertEquals(1,applied)
+        compose.runOnIdle { busy.value=true };compose.onNodeWithTag("import-apply").assertIsNotEnabled()
+        key(Key.Enter);key(Key.Back);assertEquals(1,applied);assertEquals(0,cancelled)
+    }
+    @Test fun demoImportIsMarkedAndBehavesTheSameOnTvAndPhone() {
+        show("ТЕСТ ДЛЯ ТЕЛЕФОНА",approved=false)
+        compose.onNodeWithTag("import-source-warning").assertIsDisplayed()
         compose.onNodeWithText("Подтверждаю: источник утверждён мечетью").assertDoesNotExist()
-        compose.onNodeWithText("Понимаю: тестовое расписание не утверждено мечетью").assertIsDisplayed()
-        compose.onNodeWithTag("import-confirmation").assertIsEnabled().assertIsOff()
-        compose.onNodeWithTag("import-apply").assertIsNotEnabled().performClick()
-        assertEquals(0, applications)
-        image("phone-test-source-unconfirmed")
-        compose.onNodeWithTag("import-confirmation").performClick().assertIsOn()
-        compose.onNodeWithTag("import-apply").assertIsEnabled().performClick()
-        assertEquals(1, applications)
-        image("phone-test-source-confirmed")
+        key(Key.Enter);assertEquals(1,applied)
     }
-    @Test fun unapprovedFileCannotBeConfirmed() {
-        show(approved = false, test = true)
-        compose.onNodeWithTag("import-confirmation").assertIsNotEnabled()
-        compose.onNodeWithTag("import-apply").assertIsNotEnabled()
-    }
-    @Test fun dpadFocusConfirmationApplyAndCancel() {
-        show()
-        compose.onNodeWithTag("import-cancel").assert(SemanticsMatcher.expectValue(ImportActionHighlighted, true))
-        key(Key.DirectionDown)
-        compose.onNodeWithTag("import-confirmation").assert(SemanticsMatcher.expectValue(ImportActionHighlighted, true))
-        key(Key.Enter)
-        compose.onNodeWithTag("import-confirmation").assertIsOn()
-        compose.onNodeWithTag("import-confirmation").assert(SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsProperties.Selected))
-        compose.onNodeWithTag("import-apply").assert(SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsProperties.Selected))
-        key(Key.DirectionDown)
-        compose.onNodeWithTag("import-apply").assert(SemanticsMatcher.expectValue(ImportActionHighlighted, true))
-        key(Key.Enter)
-        assertEquals(1, applications)
-        key(Key.DirectionDown); key(Key.Enter)
-        assertEquals(1, cancellations)
-    }
-    @Test fun busyCommitDisablesControlsAndCancelBeforeCommitIsExplicit() {
-        show()
-        compose.onNodeWithTag("import-cancel").performClick()
-        assertEquals(1, cancellations)
-        compose.onNodeWithTag("import-confirmation").performClick()
-        compose.runOnIdle { busy.value = true }
-        compose.onNodeWithTag("import-apply").assertIsNotEnabled()
-        compose.onNodeWithTag("import-cancel").assertIsNotEnabled()
-        key(Key.Enter)
-        assertEquals(1, cancellations)
-        assertEquals(0, applications)
-    }
-    @Test @Config(sdk = [35], qualifiers = "w800dp-h360dp-xhdpi")
-    fun landscapeActionsRemainVisibleAfterScrollingLongSource() {
-        val value = ScheduleFixtures.json().apply { addProperty("source", "Календарь мечети — ".repeat(10)) }
-            .let { ScheduleJson.parse(it.toString().toByteArray()) }
-        compose.activity.setContent { NurIslamTheme { ScheduleImportPreview(value, ScheduleState(), false, true, {}, {}) } }
-        compose.onNodeWithTag("import-row-ISHA").performScrollTo()
-        compose.onNodeWithTag("import-confirmation").assertIsDisplayed()
-        compose.onNodeWithTag("import-apply").assertIsDisplayed()
-        compose.onNodeWithTag("import-cancel").assertIsDisplayed()
-        image("import-after-landscape")
-    }
-    @Test fun successHasExplicitReturnToBoardAndDpad() {
-        compose.activity.setContent { NurIslamTheme { ScheduleImportResult(candidate(), true, { applications++ }, { cancellations++ }) } }
-        compose.onNodeWithText("Расписание применено").assertIsDisplayed()
-        image("import-success")
-        key(Key.Enter)
-        assertEquals(1, applications)
-        key(Key.DirectionDown); key(Key.Enter)
-        assertEquals(1, cancellations)
-        compose.onNodeWithText("Вернуться к табло").performClick()
-        assertEquals(2, applications)
+    @Test @Config(sdk=[35],qualifiers="w800dp-h360dp-xhdpi")
+    fun landscapeShortWindowKeepsApplyAndCancelVisible() {
+        show();compose.onNodeWithTag("import-details").performClick()
+        compose.onNodeWithTag("import-apply").assertIsDisplayed();compose.onNodeWithTag("import-cancel").assertIsDisplayed()
+        image("simple-import-landscape")
     }
 }

@@ -19,6 +19,15 @@ import org.robolectric.Shadows.shadowOf
 class FirstRunActivityTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     private fun key(key: Key, count: Int = 1) = compose.onRoot().performKeyInput { repeat(count) { pressKey(key) } }
+    private fun openWizard() {
+        key(Key.DirectionCenter)
+        compose.onNodeWithTag("admin-list").performScrollToNode(hasText("Запуск при включении телевизора"))
+        compose.onNodeWithText("Запуск при включении телевизора").performClick()
+    }
+    @org.junit.Before fun openOptionalWizard() {
+        compose.onNodeWithTag("device-setup").assertDoesNotExist()
+        openWizard()
+    }
     @Test fun skipWithRemotePersistsAndWizardCanBeReopenedFromSettings() {
         compose.onNodeWithTag("device-setup").assertIsDisplayed()
         key(Key.DirectionUp); key(Key.Enter)
@@ -27,9 +36,7 @@ class FirstRunActivityTest {
         assertFalse(SetupPreferences.from(compose.activity).kiosk)
         compose.activityRule.scenario.recreate()
         compose.onNodeWithTag("device-setup").assertDoesNotExist()
-        key(Key.DirectionCenter, 5); key(Key.DirectionDown); key(Key.Enter)
-        key(Key.DirectionDown, 9); key(Key.Enter)
-        key(Key.DirectionDown); key(Key.Enter)
+        openWizard()
         compose.onNodeWithTag("device-setup").assertIsDisplayed()
     }
     @Test fun homeDenialAndEvenOkResultCannotForgeHomeOrDeviceOwner() {
@@ -87,15 +94,15 @@ class FirstRunActivityTest {
         // Explicit kiosk consent also survives a restart before the final wizard page.
         compose.activityRule.scenario.recreate()
         assertEquals(android.app.ActivityManager.LOCK_TASK_MODE_LOCKED, lockState())
-        compose.onNodeWithTag("device-setup").assertIsDisplayed()
+        compose.onNodeWithTag("device-setup").assertDoesNotExist()
+        openWizard()
         key(Key.Back); key(Key.Enter) // summary -> completed board
         compose.onNodeWithTag("device-setup").assertDoesNotExist()
         // Simulate system losing the task on process/activity restart, then restore from saved consent.
         shadowOf(compose.activity.getSystemService(android.app.ActivityManager::class.java)).setLockTaskModeState(android.app.ActivityManager.LOCK_TASK_MODE_NONE)
         compose.activityRule.scenario.recreate()
         assertEquals(android.app.ActivityManager.LOCK_TASK_MODE_LOCKED, lockState())
-        key(Key.DirectionCenter, 5); key(Key.DirectionDown); key(Key.Enter)
-        key(Key.DirectionDown, 9); key(Key.Enter); key(Key.DirectionDown); key(Key.Enter)
+        openWizard()
         key(Key.Enter); key(Key.Enter) // wizard -> HOME -> kiosk
         key(Key.DirectionDown); key(Key.Enter)
         assertFalse(SetupPreferences.from(compose.activity).kiosk)

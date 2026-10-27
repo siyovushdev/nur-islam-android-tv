@@ -13,7 +13,7 @@ android {
         versionCode = providers.gradleProperty("nurIslamVersionCode").orNull?.let { value ->
             requireNotNull(value.toIntOrNull()?.takeIf { it in 3..2_100_000_000 }) { "Invalid nurIslamVersionCode" }
         } ?: 3
-        versionName = "0.3.0"
+        versionName = "0.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "PHONE_PREVIEW", "false")
     }

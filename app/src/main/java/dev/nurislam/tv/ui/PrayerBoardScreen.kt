@@ -6,7 +6,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.runtime.CompositionLocalProvider
+import dev.nurislam.tv.data.FajrMeaning
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.State
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
@@ -33,6 +36,9 @@ import dev.nurislam.tv.settings.BoardLanguage
 import java.time.Instant
 import java.time.LocalDate
 
+val LocalBoardZone = staticCompositionLocalOf { MoscowZone }
+private val LocalFajrMeaning = staticCompositionLocalOf { FajrMeaning.UNCONFIRMED }
+
 // A visual marker only: Selected would expose a read-only row as a checkable control.
 internal val BoardRowHighlighted = SemanticsPropertyKey<Boolean>("BoardRowHighlighted")
 
@@ -48,9 +54,11 @@ fun PrayerBoardScreen(
     notice: String? = null,
     iqamah: IqamahStatus? = null,
     ramadan: String? = null,
+    fajrMeaning: FajrMeaning = FajrMeaning.UNCONFIRMED,
 ) {
     // TextAutoSize keeps measurement state. Recreate only the visual subtree when
     // changing typeface/palette; keep the clock, calendar and settings outside it.
+    CompositionLocalProvider(LocalFajrMeaning provides fajrMeaning) {
     key(LocalBoardAppearance.current, LocalBoardSettings.current.textScale, landscape) {
     Column(Modifier.fillMaxSize()) {
     val boundaryWarning = when (iqamah) {
@@ -61,7 +69,7 @@ fun PrayerBoardScreen(
     }
     val diagnostic = (iqamah as? IqamahStatus.Conflict)?.detail ?: boundaryWarning
     if (diagnostic != null) BoxWithConstraints(Modifier.fillMaxWidth().background(LocalBoardAppearance.current.Deep)) {
-        Text(diagnostic, color = LocalBoardAppearance.current.Gold,
+        Text("Проверьте правила икамата в настройках", color = LocalBoardAppearance.current.Gold,
             fontSize = if (maxWidth < 600.dp) 14.sp else 22.sp,
             modifier = Modifier.fillMaxWidth().padding(12.dp).testTag(if (iqamah is IqamahStatus.Conflict) "iqamah-conflict" else "iqamah-boundary-warning"))
     }
@@ -71,7 +79,7 @@ fun PrayerBoardScreen(
         val colors = LocalBoardAppearance.current
         if (colors.ornate) ArchitecturalBackground()
         else Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(colors.Emerald, colors.Background, colors.Deep))))
-        val date = minute.atZone(MoscowZone).toLocalDate()
+        val date = minute.atZone(LocalBoardZone.current).toLocalDate()
         // The layout insets are symmetric; the painted foreground is not. Measured
         // at the design sizes after subtracting the unchanged architectural background:
         // portrait Elegant 82/112px, Classic 82/179px; landscape 48/69px and 48/83px.
@@ -111,6 +119,7 @@ fun PrayerBoardScreen(
     }
     }
     }
+    }
 }
 
 @Composable
@@ -133,7 +142,7 @@ private fun ClockAndDate(minute: Instant, now: State<Instant>, date: LocalDate, 
     }
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         if (!colors.ornate) Dates()
-        CurrentClock(formatClock(minute), now, s, Modifier.fillMaxWidth().weight(1f).testTag("clock"))
+        CurrentClock(formatClock(minute, LocalBoardZone.current), now, s, Modifier.fillMaxWidth().weight(1f).testTag("clock"))
         if (colors.ornate) Dates()
         if (colors.ornate) Ornament(Modifier.fillMaxWidth(.62f).height((46 * s).dp))
     }
@@ -171,13 +180,13 @@ private fun NextPrayerCard(next: NextPrayer?, now: State<Instant>, day: DaySched
             is IqamahStatus.Waiting -> if (iqamah.event.demo) "До икамата · ТЕСТ" else "До икамата"
             is IqamahStatus.Now -> if (iqamah.event.demo) "ТЕСТОВЫЙ ИКАМАТ" else "ИКАМАТ"
             is IqamahStatus.Conflict -> boardLanguage(stringResource(R.string.next_prayer)) + "\nИкамат приостановлен"
-            else -> boardLanguage(stringResource(R.string.next_prayer)) + if (event != null) "\n${if (event.demo) "ТЕСТ · " else ""}Икамат ${event.prayer.title}: ${formatTime(event.at.atZone(MoscowZone).toLocalTime())}${if (event.start == null) " · начало не подтверждено" else ""}" else if (iqamah != null) "\n${(iqamah as IqamahStatus.Idle).detail}" else ""
+            else -> boardLanguage(stringResource(R.string.next_prayer)) + if (event != null) "\n${if (event.demo) "ТЕСТ · " else ""}Икамат ${event.prayer.title}: ${formatTime(event.at.atZone(LocalBoardZone.current).toLocalTime())}${if (event.start == null) " · начало не подтверждено" else ""}" else if (iqamah != null) "\n${(iqamah as IqamahStatus.Idle).detail}" else ""
         }
         BoardText(heading, if (iqamah == null) 34f else if (activeIqamah) 36f else 30f, s, Modifier.fillMaxWidth().weight(.20f).testTag("iqamah-heading"), color = colors.Gold, lines = if (iqamah == null || activeIqamah) 1 else 2)
         if (activeIqamah && event != null) {
             BoardText(event.prayer.title, 76f, s, Modifier.fillMaxWidth().weight(.36f), bold = true)
             Row(Modifier.fillMaxWidth().weight(.44f), verticalAlignment = Alignment.CenterVertically) {
-                BoardText(formatTime(event.at.atZone(MoscowZone).toLocalTime()), 76f, s, Modifier.weight(1f).fillMaxHeight().testTag("iqamah-time"), color = colors.Gold, digits = true)
+                BoardText(formatTime(event.at.atZone(LocalBoardZone.current).toLocalTime()), 76f, s, Modifier.weight(1f).fillMaxHeight().testTag("iqamah-time"), color = colors.Gold, digits = true)
                 if (iqamah is IqamahStatus.Waiting) Countdown(now, event.at, s, Modifier.weight(1.25f).fillMaxHeight())
                 else BoardText("Икамат", 72f, s, Modifier.weight(1.25f).fillMaxHeight().testTag("iqamah-arrival"), color = colors.Gold, bold = true)
             }
@@ -195,13 +204,13 @@ private fun NextPrayerCard(next: NextPrayer?, now: State<Instant>, day: DaySched
             BoardText(title, 43f, s, Modifier.fillMaxWidth().weight(.44f).testTag("schedule-status"), bold = true, lines = 2)
             BoardText(detail, 27f, s, Modifier.fillMaxWidth().weight(.36f), color = colors.Secondary, lines = 2)
         } else {
-            val labels = eventLabels(next.event)
+            val labels = eventLabels(next.event, LocalFajrMeaning.current)
             BoardText(prayerLabel(labels.first, labels.second), 76f, s,
                 Modifier.fillMaxWidth().weight(.36f), bold = true)
             Row(Modifier.fillMaxWidth().weight(.44f), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     BoardText(boardLanguage(stringResource(R.string.prayer_time)), 27f, s, Modifier.fillMaxWidth().weight(.3f), color = colors.Secondary)
-                    BoardText(formatTime(next.at.atZone(MoscowZone).toLocalTime()), 82f, s, Modifier.fillMaxWidth().weight(.7f).testTag("next-time"), color = colors.Gold, digits = true)
+                    BoardText(formatTime(next.at.atZone(LocalBoardZone.current).toLocalTime()), 82f, s, Modifier.fillMaxWidth().weight(.7f).testTag("next-time"), color = colors.Gold, digits = true)
                 }
                 Box(Modifier.width((1.3f * s).dp).fillMaxHeight(.76f).background(colors.Outline.copy(alpha = .65f)))
                 Column(Modifier.weight(1.25f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -227,7 +236,7 @@ private fun ScheduleTable(day: DaySchedule?, next: NextPrayer?, iqamah: IqamahSt
     val active = when (iqamah) { is IqamahStatus.Waiting -> iqamah.event; is IqamahStatus.Now -> iqamah.event; else -> null }
     // Jumuah and a previous day's arrival have their own explicit iqamah row.
     // Never relabel a JSON Dhuhr time as Jumuah or highlight today's time for yesterday.
-    val separate = active?.takeIf { it.prayer == IqamahPrayer.JUMUAH || it.at.atZone(MoscowZone).toLocalDate() != day?.date }
+    val separate = active?.takeIf { it.prayer == IqamahPrayer.JUMUAH || it.at.atZone(LocalBoardZone.current).toLocalDate() != day?.date }
     val rows: List<ScheduleEvent?> = ScheduleEvent.entries.flatMap { event ->
         if (separate?.prayer?.event == event) listOf(event, null) else listOf(event)
     }
@@ -238,10 +247,10 @@ private fun ScheduleTable(day: DaySchedule?, next: NextPrayer?, iqamah: IqamahSt
             val extra = if (calendarEvent == null) separate else null
             val event = calendarEvent ?: requireNotNull(extra).prayer.event
             val highlight = if (active != null) extra != null || (separate == null && active.prayer.event == event)
-                else next?.event == event && next.at.atZone(MoscowZone).toLocalDate() == day?.date
-            val labels = eventLabels(event)
-            val time = extra?.at?.atZone(MoscowZone)?.toLocalTime()?.let(::formatTime) ?: day?.times?.get(event)?.let(::formatTime) ?: "—"
-            val description = (if (extra != null) "${extra.prayer.title} · Икамат · ${extra.at.atZone(MoscowZone).toLocalDate()}" else prayerLabel(labels.first, labels.second)) + "; $time" + if (highlight) "; выделен" else ""
+                else next?.event == event && next.at.atZone(LocalBoardZone.current).toLocalDate() == day?.date
+            val labels = eventLabels(event, LocalFajrMeaning.current)
+            val time = extra?.at?.atZone(LocalBoardZone.current)?.toLocalTime()?.let(::formatTime) ?: day?.times?.get(event)?.let(::formatTime) ?: "—"
+            val description = (if (extra != null) "${extra.prayer.title} · Икамат · ${extra.at.atZone(LocalBoardZone.current).toLocalDate()}" else prayerLabel(labels.first, labels.second)) + "; $time" + if (highlight) "; выделен" else ""
             val color = when { highlight -> if (colors.ornate) colors.Gold else colors.Deep; event.isPrayer -> colors.Text; else -> colors.Secondary }
             val rowShape = RoundedCornerShape((24 * s).dp)
             val rowModifier = if (highlight) Modifier.background(if (colors.ornate) Brush.horizontalGradient(listOf(colors.Emerald, colors.Highlight, colors.Emerald)) else Brush.linearGradient(listOf(colors.Gold, colors.Gold)), rowShape)
@@ -253,7 +262,7 @@ private fun ScheduleTable(day: DaySchedule?, next: NextPrayer?, iqamah: IqamahSt
                 }
                 Column(Modifier.weight(1f).fillMaxHeight().padding(vertical = (if (compact) 0f else 5 * s).dp), verticalArrangement = Arrangement.Center) {
                     BoardText(if (extra != null) "${extra.prayer.title} · Икамат" else stringResource(if (LocalBoardSettings.current.language == BoardLanguage.RUSSIAN) labels.second else labels.first), 36f, s, Modifier.fillMaxWidth().weight(.56f), color, bold = event.isPrayer, align = TextAlign.Start)
-                    if (extra != null || LocalBoardSettings.current.language == BoardLanguage.BOTH) BoardText(if (extra != null) extra.at.atZone(MoscowZone).toLocalDate().toString() else stringResource(labels.second), 26f, s, Modifier.fillMaxWidth().weight(.44f), color.copy(alpha = .9f), align = TextAlign.Start)
+                    if (extra != null || LocalBoardSettings.current.language == BoardLanguage.BOTH) BoardText(if (extra != null) extra.at.atZone(LocalBoardZone.current).toLocalDate().toString() else stringResource(labels.second), 26f, s, Modifier.fillMaxWidth().weight(.44f), color.copy(alpha = .9f), align = TextAlign.Start)
                 }
                 BoardText(time, 56f, s,
                     Modifier.width((202 * s).dp).fillMaxHeight(), color, digits = true, align = TextAlign.End)
@@ -271,7 +280,7 @@ private fun Footer(demo: Boolean, s: Float, modifier: Modifier, notice: String?,
         else if (colors.ornate) Ornament(Modifier.fillMaxWidth(.4f).height((24 * s).dp))
         if (demo) BoardText(stringResource(R.string.demo_label), 23f, s,
             Modifier.fillMaxWidth().weight(if (ramadan != null) .6f else 1f).testTag("demo-label"), color = colors.Gold)
-        if (notice != null && !demo) BoardText(notice, 22f, s, Modifier.fillMaxWidth().weight(if (ramadan != null) .6f else 1f), color = colors.Secondary)
+        if (notice != null && !demo) BoardText(notice, 22f, s, Modifier.fillMaxWidth().weight(if (ramadan != null) .6f else 1f).testTag("board-notice"), color = colors.Secondary)
     }
 }
 
@@ -289,9 +298,9 @@ private fun BoardText(text: String, size: Float, s: Float, modifier: Modifier, c
     }
 }
 
-fun eventLabels(event: ScheduleEvent): Pair<Int, Int> = when (event) {
+fun eventLabels(event: ScheduleEvent, fajrMeaning: FajrMeaning = FajrMeaning.UNCONFIRMED): Pair<Int, Int> = when (event) {
     ScheduleEvent.SUHUR_END -> R.string.suhur_tt to R.string.suhur_ru
-    ScheduleEvent.FAJR_IN_MOSQUE -> R.string.fajr_tt to R.string.fajr_ru
+    ScheduleEvent.FAJR_IN_MOSQUE -> R.string.fajr_tt to if (fajrMeaning == FajrMeaning.PRAYER_START) R.string.fajr_start_ru else R.string.fajr_ru
     ScheduleEvent.SUNRISE -> R.string.sunrise_tt to R.string.sunrise_ru
     ScheduleEvent.ZAWAL -> R.string.zawal_tt to R.string.zawal_ru
     ScheduleEvent.DHUHR -> R.string.dhuhr_tt to R.string.dhuhr_ru
