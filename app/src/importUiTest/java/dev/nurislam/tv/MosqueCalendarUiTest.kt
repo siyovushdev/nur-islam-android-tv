@@ -41,6 +41,16 @@ class MosqueCalendarUiTest {
       "ramadan":[{"firstFast":"${today.plusDays(5)}","eid":"${today.plusDays(34)}"}],
       "events":[{"id":"meeting","title":"Встреча сегодня","from":"$today"}]""" else ""} }"""
     private fun loadSchedule(){compose.waitUntil(10_000){app.schedules.state.value.loaded&&app.mosqueCalendar.state.value.loaded};runBlocking{app.schedules.apply(ScheduleJson.parse(ScheduleFixtures.json(today.year,meaning="PRAYER_START").apply{addProperty("timezone","Asia/Yekaterinburg")}.toString().toByteArray()))}}
+    @Test fun boardOpensSettingsByTouchAndSingleOkWithoutVisibleButton() {
+        compose.onNodeWithText("Настройки").assertDoesNotExist()
+        compose.onNodeWithTag("board-settings").performTouchInput { click(center) }
+        compose.onNodeWithText("Настройки").assertIsDisplayed()
+        compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Настройки").assertDoesNotExist()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.onNodeWithText("Настройки").assertIsDisplayed()
+    }
     @Test fun calendarBeforeScheduleUsesItsOwnCityAndKeepsPrayerTimesUnavailable() {
         compose.waitUntil(10_000) { app.schedules.state.value.loaded && app.mosqueCalendar.state.value.loaded }
         open(); import(calendar()); compose.onNodeWithTag("calendar-apply").performClick(); waitIo()

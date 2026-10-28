@@ -15,6 +15,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
@@ -242,12 +247,9 @@ class MainActivity : ComponentActivity() {
                     val iqamahStatus = remember(minute, iqamahConfig, schedules, clockProblem) {
                         iqamahStatus(minute, iqamahConfig, schedules, false, clockProblem)
                     }
-                    val demoIqamah = iqamahConfig.enabled && (if(iqamahConfig.fromFile) iqamahConfig.demo else !iqamahConfig.approved)
                     val ramadanStatus = remember(date, ramadanConfig, clockProblem, displayZone) { dev.nurislam.tv.ramadan.ramadanStatus(minute, ramadanConfig, clockProblem, displayZone, mosqueCalendar.hasDocument) }
                     val active = remember(schedules, date) { schedules.scheduleFor(date) }
                     val iqamahCompatibility = remember(date, schedules, iqamahConfig) { iqamahCompatibilityWarning(date, iqamahConfig, schedules) }
-                    val testSchedule = active != null && isTestScheduleSource(active.metadata.source)
-                    val demoData = testSchedule || (useCalendar && calendar!!.demo) || demoIqamah
                     val day = remember(active, date) { active?.day(date) }
                     val status = remember(schedules, minute) { prayerStatus(minute, schedules) }
                     val next = (status as? PrayerStatus.Upcoming)?.prayer
@@ -269,20 +271,21 @@ class MainActivity : ComponentActivity() {
                         val resolved = resolveDisplayMode(mode, constraints.maxWidth, constraints.maxHeight)
                         val board: @Composable () -> Unit = {
                             // Modal settings must hide the board from accessibility/touch automation.
-                            Box(Modifier.fillMaxSize().then(if (admin || setupOpen) Modifier.clearAndSetSemantics {} else Modifier)) {
+                            Box(Modifier.fillMaxSize().then(if (admin || setupOpen) Modifier.clearAndSetSemantics {} else Modifier
+                                .testTag("board-settings")
+                                .pointerInput(Unit) { detectTapGestures(onTap = { admin = true }) }
+                                .semantics {
+                                    contentDescription = "Открыть настройки"
+                                    onClick { admin = true; true }
+                                })) {
                             PrayerBoardScreen(minute, now, day, next, resolved == DisplayMode.LANDSCAPE, false, fajrMeaning = active?.fajrMeaning ?: dev.nurislam.tv.data.FajrMeaning.UNCONFIRMED, status = status, iqamah = if (iqamahConfig.enabled) iqamahStatus else null,
                                 ramadan = listOfNotNull(dev.nurislam.tv.ramadan.ramadanText(ramadanStatus, settings.language), if(useCalendar) calendar!!.eventText(minute, settings.language) else null).joinToString(" · ").takeIf { it.isNotEmpty() },
                                 notice = when {
-                                    testSchedule -> "ТЕСТОВОЕ РАСПИСАНИЕ"
-                                    demoData -> "ТЕСТОВЫЙ КАЛЕНДАРЬ"
                                     calendarDiagnostic != null || schedules.problem != null || iqamah.problem != null || ramadan.problem != null || iqamahCompatibility != null || (!mosqueCalendar.hasDocument && legacyReady && !legacyCompatible && (iqamah.config.rules.isNotEmpty() || ramadan.config.dates.isNotEmpty())) -> "Проверьте загруженные данные в настройках"
                                     active == null -> "Загрузите расписание в настройках"
                                     else -> null
                                 })
                             if (!admin && !setupOpen) {
-                                TextButton(onClick = { admin = true }, modifier = Modifier.align(Alignment.TopEnd).padding(horizontal = 16.dp).testTag("board-settings")) {
-                                    Text("Настройки", color = LocalBoardAppearance.current.Gold)
-                                }
                                 if (active == null) TextButton(onClick = { admin = true }, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp).testTag("load-schedule")) {
                                     Text("Загрузить расписание", color = LocalBoardAppearance.current.Gold)
                                 }

@@ -150,9 +150,9 @@ class IqamahUiTest {
             PrayerBoardScreen(clock.value, clock, calendar.day(day), (status as? PrayerStatus.Upcoming)?.prayer,
                 false, false, status = status, iqamah = iqamahStatus(clock.value, entered, schedules, allowDemo = true))
         } }
-        compose.onNodeWithText("До икамата · ТЕСТ").assertDoesNotExist()
+        compose.onNodeWithText("До икамата").assertDoesNotExist()
         compose.runOnIdle { clock.value = start }
-        compose.onNodeWithText("До икамата · ТЕСТ").assertIsDisplayed()
+        compose.onNodeWithText("До икамата").assertIsDisplayed()
         compose.onNodeWithTag("row-ASR").assertHighlighted(true).assertHasNoClickAction()
             .assert(SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsProperties.Selected))
         compose.onNodeWithTag("row-MAGHRIB").assertHighlighted(false)
@@ -164,7 +164,7 @@ class IqamahUiTest {
         compose.onNodeWithTag("row-ASR").assertHighlighted(true)
         compose.runOnIdle { clock.value = start.plusSeconds(780) }
         compose.onNodeWithTag("iqamah-arrival").assertDoesNotExist()
-        compose.onNodeWithText("До икамата · ТЕСТ").assertDoesNotExist()
+        compose.onNodeWithText("До икамата").assertDoesNotExist()
         compose.onNodeWithTag("row-ASR").assertHighlighted(false)
         compose.onNodeWithTag("row-MAGHRIB").assertHighlighted(true)
     }
