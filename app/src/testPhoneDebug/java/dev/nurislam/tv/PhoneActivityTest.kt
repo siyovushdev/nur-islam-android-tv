@@ -113,7 +113,7 @@ class PhoneActivityTest {
             for (mode in DisplayMode.entries) for (scale in listOf(.85f, 1f, 1.15f)) {
                 runBlocking { app.settings.update { it.copy(theme = theme, displayMode = mode, textScale = scale) } }
                 compose.waitForIdle()
-                compose.onNodeWithTag("board-notice").assertIsDisplayed()
+                compose.onNodeWithText("ТЕСТОВОЕ РАСПИСАНИЕ").assertDoesNotExist()
                 val viewport = compose.onNodeWithTag("phone-viewport").fetchSemanticsNode().boundsInRoot
                 val board = compose.onNodeWithTag("prayer-board").fetchSemanticsNode().boundsInRoot
                 assertTrue("$theme / $mode / $scale: board left", board.left >= viewport.left - 1f)
