@@ -113,7 +113,7 @@ class PhoneActivityTest {
             for (mode in DisplayMode.entries) for (scale in listOf(.85f, 1f, 1.15f)) {
                 runBlocking { app.settings.update { it.copy(theme = theme, displayMode = mode, textScale = scale) } }
                 compose.waitForIdle()
-                compose.onNodeWithTag("board-notice").assertIsDisplayed()
+                compose.onNodeWithText("ТЕСТОВОЕ РАСПИСАНИЕ").assertDoesNotExist()
                 val viewport = compose.onNodeWithTag("phone-viewport").fetchSemanticsNode().boundsInRoot
                 val board = compose.onNodeWithTag("prayer-board").fetchSemanticsNode().boundsInRoot
                 assertTrue("$theme / $mode / $scale: board left", board.left >= viewport.left - 1f)
@@ -174,7 +174,7 @@ class PhoneActivityTest {
         compose.onNodeWithText("Загрузить расписание").assertIsDisplayed()
     }
 
-    @Test fun phoneTestJsonCanBeAppliedWithPersistentBannerAfterRecreation() {
+    @Test fun phoneTestJsonKeepsValuesWithoutServiceBannerAfterRecreation() {
         val uri = android.net.Uri.parse("content://test.documents/nur-islam-kazan-2026-TEST.json")
         val year = Instant.now().atZone(MoscowZone).year
         val json = ScheduleFixtures.json(year, "phone-demo", meaning = "PRAYER_START").apply {
@@ -190,12 +190,12 @@ class PhoneActivityTest {
         assertEquals("ТЕСТ ДЛЯ ТЕЛЕФОНА", app.schedules.state.value.current!!.metadata.source)
         compose.onNodeWithText("Расписание применено. Табло обновлено.").assertIsDisplayed()
         compose.onNodeWithText("Вернуться к табло").performClick()
-        compose.onNodeWithTag("board-notice").assertIsDisplayed().assert(hasAnyDescendant(hasText("ТЕСТОВОЕ РАСПИСАНИЕ", substring = true)))
+        compose.onNodeWithText("ТЕСТОВОЕ РАСПИСАНИЕ").assertDoesNotExist()
         compose.onNodeWithTag("row-ASR").assert(hasAnyDescendant(hasText("15:15")))
         compose.mainClock.advanceTimeBy(20_000)
-        compose.onNodeWithTag("board-notice").assertIsDisplayed()
+        compose.onNodeWithText("ТЕСТОВОЕ РАСПИСАНИЕ").assertDoesNotExist()
         compose.activityRule.scenario.recreate()
-        compose.onNodeWithTag("board-notice").assertIsDisplayed()
+        compose.onNodeWithText("ТЕСТОВОЕ РАСПИСАНИЕ").assertDoesNotExist()
         compose.onNodeWithTag("row-ASR").assert(hasAnyDescendant(hasText("15:15")))
         screenshot("board-notice")
     }
@@ -219,13 +219,13 @@ class PhoneActivityTest {
         iqaTap("Подтвердить сохранение")
         compose.onNodeWithText("Правила сохранены").assertIsDisplayed()
         iqaTap("Вернуться к табло")
-        compose.onNodeWithTag("board-notice").assert(hasAnyDescendant(hasText("ТЕСТОВОЕ РАСПИСАНИЕ", substring = true)))
+        compose.onNodeWithText("ТЕСТОВОЕ РАСПИСАНИЕ").assertDoesNotExist()
         assertEquals(990, app.iqamah.state.value.config.rules.single().value)
         val repo = dev.nurislam.tv.iqamah.IqamahRepository(dev.nurislam.tv.data.AtomicScheduleStorage(File(app.filesDir, "iqamah-store.json")))
         runBlocking { repo.load() }
         assertEquals(app.iqamah.state.value.config, repo.state.value.config)
         compose.activityRule.scenario.recreate()
-        compose.onNodeWithTag("board-notice").assert(hasAnyDescendant(hasText("ТЕСТОВОЕ РАСПИСАНИЕ", substring = true)))
+        compose.onNodeWithText("ТЕСТОВОЕ РАСПИСАНИЕ").assertDoesNotExist()
         openSettings(); tap("Для специалиста"); tap("Ручной икамат (прежний способ)")
         iqaTap("Сегодня: начало / икамат / правило")
         compose.onNodeWithText("Начало: не подтверждено · Икамат: 16:30", substring = true).performScrollTo().assertIsDisplayed()

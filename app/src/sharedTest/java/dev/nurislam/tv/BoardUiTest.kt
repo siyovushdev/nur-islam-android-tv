@@ -74,7 +74,7 @@ class BoardUiTest {
         ScheduleEvent.entries.forEach { compose.onNodeWithTag("row-${it.name}").assertIsDisplayed() }
         compose.onNodeWithTag("next-time").assert(hasAnyDescendant(hasText("15:15")))
         compose.onNodeWithTag("countdown").assert(hasAnyDescendant(hasText("00:55:00")))
-        compose.onNodeWithTag("demo-label").assertIsDisplayed()
+        compose.onNodeWithTag("demo-label").assertDoesNotExist()
         saveScreenshot("portrait")
     }
     @Test fun landscapeShowsAllEightRows() {

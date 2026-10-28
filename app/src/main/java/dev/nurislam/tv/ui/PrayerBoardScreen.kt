@@ -111,9 +111,8 @@ fun PrayerBoardScreen(
         if (iqamah is IqamahStatus.Now && iqamah.dim) {
             Column(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .86f)).padding(24.dp).testTag("iqamah-dim"),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                BoardText(if (iqamah.event.demo) "ТЕСТОВЫЙ ИКАМАТ" else "ИКАМАТ", 120f, scale, Modifier.fillMaxWidth().height((180 * scale).dp), colors.Gold, bold = true)
+                BoardText("ИКАМАТ", 120f, scale, Modifier.fillMaxWidth().height((180 * scale).dp), colors.Gold, bold = true)
                 BoardText(iqamah.event.prayer.title, 76f, scale, Modifier.fillMaxWidth().height((120 * scale).dp), colors.Text, bold = true)
-                BoardText("Настройки доступны с пульта / кнопки телефона", 26f, scale, Modifier.fillMaxWidth().height((60 * scale).dp), colors.Secondary)
             }
         }
     }
@@ -177,10 +176,10 @@ private fun NextPrayerCard(next: NextPrayer?, now: State<Instant>, day: DaySched
         val event = when (iqamah) { is IqamahStatus.Waiting -> iqamah.event; is IqamahStatus.Now -> iqamah.event; is IqamahStatus.Idle -> iqamah.upcoming; else -> null }
         val activeIqamah = iqamah is IqamahStatus.Waiting || iqamah is IqamahStatus.Now
         val heading = when (iqamah) {
-            is IqamahStatus.Waiting -> if (iqamah.event.demo) "До икамата · ТЕСТ" else "До икамата"
-            is IqamahStatus.Now -> if (iqamah.event.demo) "ТЕСТОВЫЙ ИКАМАТ" else "ИКАМАТ"
+            is IqamahStatus.Waiting -> "До икамата"
+            is IqamahStatus.Now -> "ИКАМАТ"
             is IqamahStatus.Conflict -> boardLanguage(stringResource(R.string.next_prayer)) + "\nИкамат приостановлен"
-            else -> boardLanguage(stringResource(R.string.next_prayer)) + if (event != null) "\n${if (event.demo) "ТЕСТ · " else ""}Икамат ${event.prayer.title}: ${formatTime(event.at.atZone(LocalBoardZone.current).toLocalTime())}${if (event.start == null) " · начало не подтверждено" else ""}" else if (iqamah != null) "\n${(iqamah as IqamahStatus.Idle).detail}" else ""
+            else -> boardLanguage(stringResource(R.string.next_prayer)) + if (event != null) "\nИкамат ${event.prayer.title}: ${formatTime(event.at.atZone(LocalBoardZone.current).toLocalTime())}" else ""
         }
         BoardText(heading, if (iqamah == null) 34f else if (activeIqamah) 36f else 30f, s, Modifier.fillMaxWidth().weight(.20f).testTag("iqamah-heading"), color = colors.Gold, lines = if (iqamah == null || activeIqamah) 1 else 2)
         if (activeIqamah && event != null) {
@@ -278,9 +277,7 @@ private fun Footer(demo: Boolean, s: Float, modifier: Modifier, notice: String?,
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         if (ramadan != null) BoardText(ramadan, 24f, s, Modifier.fillMaxWidth().weight(1.4f).testTag("ramadan-status"), color = colors.Gold, lines = if (LocalBoardSettings.current.language == BoardLanguage.BOTH) 2 else 1)
         else if (colors.ornate) Ornament(Modifier.fillMaxWidth(.4f).height((24 * s).dp))
-        if (demo) BoardText(stringResource(R.string.demo_label), 23f, s,
-            Modifier.fillMaxWidth().weight(if (ramadan != null) .6f else 1f).testTag("demo-label"), color = colors.Gold)
-        if (notice != null && !demo) BoardText(notice, 22f, s, Modifier.fillMaxWidth().weight(if (ramadan != null) .6f else 1f).testTag("board-notice"), color = colors.Secondary)
+        if (notice != null) BoardText(notice, 22f, s, Modifier.fillMaxWidth().weight(if (ramadan != null) .6f else 1f).testTag("board-notice"), color = colors.Secondary)
     }
 }
 
